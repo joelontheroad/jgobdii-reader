@@ -1,0 +1,235 @@
+{
+  "version": "1.0.0",
+  "name": "OBD-II Diagnostic Knowledge Base, Failure Clusters & Telemetry Guide",
+  "failure_clusters": [
+    {
+      "cluster_id": "CLUSTER_VACUUM_LEAK",
+      "name": "Unmetered Air / Vacuum Leak Cluster",
+      "associated_codes": ["P0171", "P0174", "P0300", "P0507"],
+      "live_data_signature": {
+        "fuel_trims_idle": "Heavily positive (+15% to +35%)",
+        "fuel_trims_2500_rpm": "Normalizes back to near 0% (+0% to +5%)",
+        "maf_reading": "Appears normal or slightly low at idle"
+      },
+      "physics_and_symptoms": "Air enters intake tract downstream of the MAF sensor without being measured by the computer, causing a lean air-fuel ratio that causes random cylinder misfires.",
+      "common_causes": [
+        "Cracked rubber intake accordion duct between MAF and throttle body",
+        "Hardened/cracked intake manifold gaskets (especially cold)",
+        "Perished or disconnected PCV breather hose",
+        "Leaking brake booster vacuum diaphragm",
+        "Loose or missing engine oil filler cap / dipstick seal"
+      ],
+      "diagnostic_test": "Perform an automotive smoke test on intake tract or compare fuel trims at idle vs 2,500 RPM.",
+      "wiki_topic": "https://en.wikipedia.org/wiki/Vacuum_leak",
+      "youtube_query": "how to diagnose vacuum leak fuel trims scannerdanner"
+    },
+    {
+      "cluster_id": "CLUSTER_DIRTY_MAF",
+      "name": "Contaminated / Failing Mass Air Flow Sensor",
+      "associated_codes": ["P0101", "P0171", "P0174"],
+      "live_data_signature": {
+        "fuel_trims_idle": "Positive (+12% to +25%)",
+        "fuel_trims_2500_rpm": "Remains elevated positive (+15% to +25%) - does NOT normalize",
+        "maf_reading": "Significantly under-reporting (e.g. 1.8 g/s on a 3.0L engine at warm idle)"
+      },
+      "physics_and_symptoms": "Contaminants or oil film on the heated platinum wire insulates it from airflow, causing the ECU to calculate less incoming air mass than reality.",
+      "common_causes": [
+        "Dust and debris on MAF sensing wire",
+        "Excess oil from reusable aftermarket air filters",
+        "Corroded sensor electrical connector pins"
+      ],
+      "diagnostic_test": "Check hot idle MAF reading in g/s against engine displacement in liters. Clean with MAF cleaner.",
+      "wiki_topic": "https://en.wikipedia.org/wiki/Mass_flow_sensor",
+      "youtube_query": "diagnose dirty MAF sensor live data scannerdanner"
+    },
+    {
+      "cluster_id": "CLUSTER_CATALYST_EFFICIENCY",
+      "name": "Catalytic Converter Degradation Cluster",
+      "associated_codes": ["P0420", "P0430"],
+      "preceding_codes": ["P0300", "P0130", "P0136"],
+      "live_data_signature": {
+        "upstream_o2_sensor_1": "Normal 1-2 Hz switching (0.1V to 0.9V)",
+        "downstream_o2_sensor_2": "Rapidly oscillates (0.1V to 0.9V), mirroring Sensor 1 instead of holding a flat 0.55V-0.70V line"
+      },
+      "physics_and_symptoms": "The precious metal substrate has lost its ability to store oxygen. Exhaust gases pass through untreated without chemical reduction of NOx or oxidation of CO/HC.",
+      "common_causes": [
+        "Thermal meltdown from raw unburned fuel burning inside converter (chronic misfires)",
+        "Engine oil burning (phosphorus poisoning from worn valve seals/rings)",
+        "Exhaust leak directly ahead of or near the catalytic converter",
+        "Silicon poisoning from non-sensor-safe silicone sealant"
+      ],
+      "diagnostic_test": "Graph Upstream vs Downstream O2 sensor voltages on oscilloscope display in closed-loop cruise.",
+      "wiki_topic": "https://en.wikipedia.org/wiki/Catalytic_converter",
+      "youtube_query": "how to test catalytic converter P0420 live data scannerdanner"
+    },
+    {
+      "cluster_id": "CLUSTER_COOLANT_THERMOSTAT",
+      "name": "Thermostat Stuck Open / Under-Temperature",
+      "associated_codes": ["P0128", "P0125"],
+      "live_data_signature": {
+        "engine_coolant_temp": "Fails to reach 85°C-95°C; plateaus at 60°C-72°C during driving",
+        "loop_status": "Reverts to Open Loop or high warm-up fuel enrichment"
+      },
+      "physics_and_symptoms": "Coolant circulates continuously through the radiator even when cold, preventing the engine from reaching closed-loop operating temperature.",
+      "common_causes": [
+        "Mechanical thermostat stuck open by broken return spring",
+        "Perished rubber sealing ring on thermostat valve",
+        "Defective Engine Coolant Temperature (ECT) sensor"
+      ],
+      "diagnostic_test": "Monitor ECT rise time from cold start. Feel upper radiator hose: should remain cold until thermostat snaps open at ~88°C.",
+      "wiki_topic": "https://en.wikipedia.org/wiki/Thermostat#Automotive",
+      "youtube_query": "diagnose P0128 thermostat stuck open live data"
+    },
+    {
+      "cluster_id": "CLUSTER_VVT_TIMING_CHAIN",
+      "name": "Variable Valve Timing / Timing Chain Stretch",
+      "associated_codes": ["P0016", "P0017", "P0011", "P0012", "P0300"],
+      "live_data_signature": {
+        "camshaft_advance_angle": "Phase error between commanded and actual cam angle exceeds 10°",
+        "calculated_load": "Elevated at idle due to valve timing inefficiency"
+      },
+      "physics_and_symptoms": "Chain elongation or clogged VVT phaser prevents camshaft from aligning with crankshaft timing marks.",
+      "common_causes": [
+        "Stretched timing chain from neglected oil change intervals",
+        "Worn timing chain guides and collapsed hydraulic tensioner",
+        "Clogged mesh filter screens in VVT oil control solenoids"
+      ],
+      "diagnostic_test": "Dual-channel oscilloscope capture comparing Crankshaft Position (CKP) and Camshaft Position (CMP) waveforms.",
+      "wiki_topic": "https://en.wikipedia.org/wiki/Variable_valve_timing",
+      "youtube_query": "diagnose P0016 crank cam correlation timing chain"
+    },
+    {
+      "cluster_id": "CLUSTER_LOW_SYSTEM_VOLTAGE",
+      "name": "Charging System Brownout & Phantom Codes",
+      "associated_codes": ["P0562", "U0100", "U0101", "P0112", "P0117", "P0122"],
+      "live_data_signature": {
+        "control_module_voltage": "Drops below 11.5V while running (normal charging is 13.5V to 14.5V)"
+      },
+      "physics_and_symptoms": "When voltage drops below microchip logic thresholds, communication between modules drops out and multiple 5V sensor circuits register false low-input codes.",
+      "common_causes": [
+        "Failing alternator / worn carbon brushes / blown diode bridge",
+        "Loose or corroded negative battery terminal clamp",
+        "Broken or rusted chassis ground strap between engine block and unibody"
+      ],
+      "diagnostic_test": "Check voltage drop across battery terminals and alternator B+ stud with engine idling and accessories on.",
+      "wiki_topic": "https://en.wikipedia.org/wiki/Alternator_(automotive)",
+      "youtube_query": "diagnose P0562 low system voltage south main auto"
+    }
+  ],
+  "live_telemetry_guide": {
+    "06_07_08_09": {
+      "parameter": "Fuel Trims (STFT & LTFT)",
+      "modes": ["0106", "0107", "0108", "0109"],
+      "unit": "Percentage (%)",
+      "normal_range": "-5% to +5%",
+      "meaning": "Short Term (STFT) is instantaneous closed-loop correction; Long Term (LTFT) is learned adaptive correction stored in ECU memory. Total Fuel Trim = STFT + LTFT.",
+      "diagnostic_rule": "Total Trim > +10% indicates lean (adding fuel). Total Trim < -10% indicates rich (subtracting fuel). High positive trim at idle that drops at 2,500 RPM confirms a vacuum leak.",
+      "wiki_url": "https://en.wikipedia.org/wiki/Fuel_trim",
+      "youtube_search": "understanding fuel trims scannerdanner"
+    },
+    "0C": {
+      "parameter": "Engine RPM",
+      "modes": ["010C"],
+      "unit": "Revolutions Per Minute (RPM)",
+      "normal_range": "650 - 850 RPM (idle), up to redline",
+      "meaning": "Rotational speed of engine crankshaft calculated by CKP sensor.",
+      "diagnostic_rule": "Erratic dropouts to 0 RPM during cranking indicate a faulty crankshaft position sensor.",
+      "wiki_url": "https://en.wikipedia.org/wiki/Tachometer",
+      "youtube_search": "test engine RPM sensor crankshaft sensor"
+    },
+    "0D": {
+      "parameter": "Vehicle Speed (VSS)",
+      "modes": ["010D"],
+      "unit": "km/h (or mph)",
+      "normal_range": "0 to vehicle maximum",
+      "meaning": "Road speed derived from transmission or wheel speed sensors.",
+      "diagnostic_rule": "If speedometer fluctuates or transmission fails to shift, compare live VSS PID against GPS speed. Physical pulse frequency (Hz) is approximately Speed (mph) * 1.111 Hz for standard 4-pulse/rev sensors.",
+      "wiki_url": "https://en.wikipedia.org/wiki/Speedometer",
+      "youtube_search": "diagnose vehicle speed sensor VSS"
+    },
+    "05": {
+      "parameter": "Engine Coolant Temperature (ECT)",
+      "modes": ["0105"],
+      "unit": "Degrees Celsius (°C)",
+      "normal_range": "85°C to 95°C (185°F to 203°F)",
+      "meaning": "Thermal status of engine coolant measured by NTC thermistor.",
+      "diagnostic_rule": "If stuck under 75°C during highway cruise, thermostat is stuck open (P0128). If exceeding 105°C, cooling system failure is active.",
+      "wiki_url": "https://en.wikipedia.org/wiki/Engine_cooling",
+      "youtube_search": "test engine coolant temperature sensor ECT"
+    },
+    "10": {
+      "parameter": "Mass Air Flow (MAF)",
+      "modes": ["0110"],
+      "unit": "Grams Per Second (g/s)",
+      "normal_range": "Approximately 1.0 g/s per liter of engine displacement at warm idle (e.g. 3.0 g/s for 3.0L V6)",
+      "meaning": "Mass of air entering the engine intake tract.",
+      "diagnostic_rule": "At wide open throttle (WOT) at redline, g/s should reach roughly 80% of peak engine horsepower. Under-reporting at idle causes lean codes.",
+      "wiki_url": "https://en.wikipedia.org/wiki/Mass_flow_sensor",
+      "youtube_search": "calculate MAF sensor grams per second rule of thumb"
+    },
+    "14_15": {
+      "parameter": "Oxygen Sensor Voltages (Bank 1 Sensor 1 & Sensor 2)",
+      "modes": ["0114", "0115"],
+      "unit": "Volts (V)",
+      "normal_range": "Sensor 1: 0.1V to 0.9V (switching); Sensor 2: 0.55V to 0.70V (steady flatline)",
+      "meaning": "Sensor 1 measures raw exhaust oxygen before catalyst. Sensor 2 measures exhaust oxygen after catalyst.",
+      "diagnostic_rule": "Sensor 1 must switch rapidly 1-2 times per second. If Sensor 2 mimics Sensor 1 switching, the catalytic converter has lost oxygen storage capacity (P0420).",
+      "wiki_url": "https://en.wikipedia.org/wiki/Oxygen_sensor",
+      "youtube_search": "how to read oxygen sensor live data on scan tool"
+    },
+    "04": {
+      "parameter": "Calculated Engine Load",
+      "modes": ["0104"],
+      "unit": "Percentage (%)",
+      "normal_range": "15% to 25% at hot idle in Park/Neutral",
+      "meaning": "Current airflow as a percentage of maximum theoretical peak airflow at current RPM.",
+      "diagnostic_rule": "High idle load (>35%) with A/C off indicates mechanical engine drag, retarded valve timing, or restricted exhaust flow.",
+      "wiki_url": "https://en.wikipedia.org/wiki/OBD-II_PIDs#Standard_PIDs",
+      "youtube_search": "calculated engine load OBD2 live data explained"
+    }
+  },
+  "media_resources": {
+    "recommended_youtube_channels": [
+      {
+        "name": "ScannerDanner",
+        "host": "Paul Danner",
+        "specialty": "OBD-II Live Data Analysis, Fuel Trims, Oscilloscope Waveforms, Hands-on Diagnostics",
+        "channel_url": "https://www.youtube.com/@ScannerDanner"
+      },
+      {
+        "name": "South Main Auto Repair LLC",
+        "host": "Eric O.",
+        "specialty": "Real-world automotive electrical diagnostics, code clusters, rusted harness troubleshooting",
+        "channel_url": "https://www.youtube.com/@SouthMainAuto"
+      },
+      {
+        "name": "Pine Hollow Auto Diagnostics",
+        "host": "Ivan",
+        "specialty": "Advanced network diagnostics, CAN bus sniffer troubleshooting, oscilloscope lab scope captures",
+        "channel_url": "https://www.youtube.com/@PineHollowAutoDiagnostics"
+      },
+      {
+        "name": "Schrodingers Box",
+        "specialty": "Physics and chemical theory of fuel trims, quantum of diagnostics, O2 sensor operation",
+        "channel_url": "https://www.youtube.com/@SchrodingersBox"
+      },
+      {
+        "name": "ChrisFix",
+        "specialty": "DIY step-by-step component replacement and physical repairs",
+        "channel_url": "https://www.youtube.com/@ChrisFix"
+      }
+    ],
+    "nhtsa_api_endpoints": {
+      "recalls_by_vin": "https://api.nhtsa.gov/recalls/recallsByVin?vin={VIN}&issueType=r",
+      "recalls_by_model": "https://api.nhtsa.gov/recalls/recallsByModel?make={MAKE}&model={MODEL}&modelYear={YEAR}",
+      "safety_ratings": "https://api.nhtsa.gov/SafetyRatings/modelyear/{YEAR}/make/{MAKE}/model/{MODEL}"
+    },
+    "open_datasets": [
+      {
+        "name": "EngineFaultDB",
+        "description": "55,000+ labeled sensor records of automotive engine diagnostics simulating healthy vs fault conditions (IEEE Access)",
+        "url": "https://github.com/leoxthomas/EngineFaultDB"
+      }
+    ]
+  }
+}

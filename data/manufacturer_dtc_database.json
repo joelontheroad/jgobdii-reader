@@ -1,0 +1,310 @@
+{
+  "version": "1.0.0",
+  "source": "OEM Technical Service Information & Diagnostic Manuals",
+  "manufacturers": {
+    "toyota": {
+      "name": "Toyota / Lexus",
+      "protocols": "ISO 15765-4 (CAN 500k), ISO 14230-4 (KWP2000)",
+      "codes": [
+        {
+          "code": "P1130",
+          "system": "Fuel & Air Metering (Air/Fuel Ratio Sensor)",
+          "description": "Air/Fuel Ratio Sensor Circuit Range/Performance (Bank 1 Sensor 1)",
+          "symptoms": ["Check Engine Light (MIL)", "Hesitation on light throttle", "Reduced fuel economy"],
+          "causes": ["Defective A/F sensor (Bank 1 Sensor 1)", "Exhaust manifold leak ahead of sensor", "Sensor harness open/short", "ECM fuel calculation error"]
+        },
+        {
+          "code": "P1135",
+          "system": "Fuel & Air Metering (Air/Fuel Ratio Sensor Heater)",
+          "description": "Air/Fuel Ratio Sensor Heater Circuit Response (Bank 1 Sensor 1)",
+          "symptoms": ["MIL illuminated on startup", "Delayed closed loop fuel trim entry"],
+          "causes": ["Blown A/F heater element (normal cold resistance 0.8-1.4 ohms)", "Blown EFI or A/F heater fuse/relay", "Wiring corrosion at sensor sub-harness"]
+        },
+        {
+          "code": "P1150",
+          "system": "Fuel & Air Metering (Air/Fuel Ratio Sensor)",
+          "description": "Air/Fuel Ratio Sensor Circuit Range/Performance (Bank 2 Sensor 1)",
+          "symptoms": ["MIL on V6/V8 engines", "Poor throttle response", "High hydrocarbon emissions"],
+          "causes": ["Faulty Bank 2 Sensor 1 A/F sensor", "Bank 2 exhaust manifold gasket leak", "Intake manifold vacuum leak on Bank 2"]
+        },
+        {
+          "code": "P1155",
+          "system": "Fuel & Air Metering (Air/Fuel Ratio Sensor Heater)",
+          "description": "Air/Fuel Ratio Sensor Heater Circuit Response (Bank 2 Sensor 1)",
+          "symptoms": ["MIL on cold start", "Increased emissions"],
+          "causes": ["Open heater coil in Bank 2 Sensor 1", "High resistance in power ground harness"]
+        },
+        {
+          "code": "P1300",
+          "system": "Ignition System (Igniter Feedback)",
+          "description": "Igniter Circuit Malfunction (Cylinder No. 1 / IGF Confirmation Missing)",
+          "symptoms": ["Engine stalls or runs extremely rough", "Loss of power", "Strong raw fuel smell"],
+          "causes": ["Defective ignition coil with integrated igniter", "Open or short in IGF feedback wire to ECM", "Poor engine block ground"]
+        },
+        {
+          "code": "P1335",
+          "system": "Ignition System / Crankshaft Reference",
+          "description": "Crankshaft Position Sensor Circuit (No CKP Signal While Engine Running)",
+          "symptoms": ["Sudden engine cut-off while driving", "Crank no-start when warm"],
+          "causes": ["Damaged CKP sensor tip or reluctor ring teeth", "Defective CKP sensor harness routing near exhaust", "ECM internal pulse receiver failure"]
+        },
+        {
+          "code": "P1349",
+          "system": "Engine Mechanical (VVT Variable Valve Timing)",
+          "description": "VVT System Malfunction (Bank 1 Camshaft Phase Angle Deviation)",
+          "symptoms": ["Rough idle (engine shakes)", "Stalling when stopping at red lights", "Poor high-RPM power"],
+          "causes": ["Clogged VVT oil control valve (OCV) micro-screen filter", "Stuck or failing VVT solenoid actuator", "Low engine oil level or severely sludged oil", "Worn VVT cam gear actuator"]
+        },
+        {
+          "code": "P1440",
+          "system": "Secondary Air Injection System",
+          "description": "Secondary Air Injection System Switching Valve Stuck Open (Bank 1)",
+          "symptoms": ["MIL illuminated", "Air pump vacuum noise on deceleration"],
+          "causes": ["Air switching valve stuck due to moisture/carbon accumulation", "Air injection pump driver failure"]
+        },
+        {
+          "code": "P1600",
+          "system": "Computer & Output Circuits (ECM Memory)",
+          "description": "ECM BATT Backup Power Supply Circuit Malfunction",
+          "symptoms": ["Loss of radio presets / trip data", "Loss of learned fuel trims after key-off"],
+          "causes": ["Blown EFI backup fuse in underhood fuse box", "Corroded constant +12V unswitched battery wire to ECM pin BATT"]
+        },
+        {
+          "code": "C1201",
+          "system": "Braking & Stability Control (Skid Control ECM)",
+          "description": "Engine Control System Malfunction (ABS / VSC System Disabled)",
+          "symptoms": ["VSC OFF and TRAC OFF warning lights illuminated alongside Check Engine Light", "ABS operational but traction control disabled"],
+          "causes": ["Powertrain ECM has stored an active emission/engine trouble code and commanded Skid Control ECU to disable traction interventions", "Note: Clear engine DTC first to resolve C1201"]
+        },
+        {
+          "code": "C1241",
+          "system": "Braking & Stability Control (Skid Control ECM)",
+          "description": "Low Battery Positive Voltage or Abnormally High Power Supply",
+          "symptoms": ["Brake and ABS warning lights flicker", "Steering feels heavy"],
+          "causes": ["Weak 12V auxiliary battery", "Alternator diode ripple or voltage regulator fault", "Corroded chassis ground strap"]
+        },
+        {
+          "code": "B1100",
+          "system": "Body / Supplemental Restraint System (Airbag)",
+          "description": "Airbag Sensor Assembly Malfunction",
+          "symptoms": ["SRS / Airbag warning indicator on cluster illuminated"],
+          "causes": ["Internal center airbag sensor assembly fault", "Loose center console harness connector", "Low system operating voltage during deployment check"]
+        }
+      ]
+    },
+    "honda": {
+      "name": "Honda / Acura",
+      "protocols": "ISO 15765-4 (CAN 500k), ISO 9141-2 / K-Line",
+      "codes": [
+        {
+          "code": "P1259",
+          "system": "Engine Mechanical (VTEC System)",
+          "description": "VTEC System Malfunction (Oil Pressure Switch or Spool Valve Circuit)",
+          "symptoms": ["Hard rev-limiter kick at 3,500 - 4,000 RPM (Limp mode)", "Check Engine Light on acceleration"],
+          "causes": ["Critically low engine oil level or low oil pressure", "Clogged VTEC spool valve solenoid mesh screen gasket", "Defective VTEC oil pressure switch", "Open wiring in VTEC solenoid circuit"]
+        },
+        {
+          "code": "P1298",
+          "system": "Electrical / Power Distribution",
+          "description": "Electric Load Detector (ELD) Circuit High Voltage",
+          "symptoms": ["Alternator intermittently failing to charge battery", "Headlights dimming at idle"],
+          "causes": ["Failed ELD module inside under-hood fuse/relay box", "Open ELD ground circuit", "ECM ELD input pin fault"]
+        },
+        {
+          "code": "P1399",
+          "system": "Ignition & Combustion",
+          "description": "Random Cylinder Misfire Detected (Honda OEM Intermediate Code)",
+          "symptoms": ["Engine shudder under load", "Flashing Check Engine Light"],
+          "causes": ["Tight exhaust valve lash (valve adjustment required)", "Clogged EGR manifold runners on intake manifold", "Worn spark plugs or failing ignition coil packs", "Partially clogged fuel injector"]
+        },
+        {
+          "code": "P1456",
+          "system": "Evaporative Emission System (Fuel Tank)",
+          "description": "EVAP Emission Control System Leak Detected (Fuel Tank System Area)",
+          "symptoms": ["Check Engine Light illuminated", "Loose fuel cap warning"],
+          "causes": ["Loose or worn fuel filler cap gasket", "Damaged fuel tank neck", "Failing two-way bypass valve", "Fuel tank pressure (FTP) sensor defect"]
+        },
+        {
+          "code": "P1457",
+          "system": "Evaporative Emission System (Canister Area)",
+          "description": "EVAP Emission Control System Leak Detected (EVAP Canister Area)",
+          "symptoms": ["Check Engine Light", "No noticeable drivability symptoms"],
+          "causes": ["Corroded EVAP canister vent shut valve (CVS) solenoid caused by road salt", "Rusted CVS mounting screw puncturing canister plastic", "Cracked vacuum lines near charcoal canister"]
+        },
+        {
+          "code": "P1491",
+          "system": "Emissions / Exhaust Gas Recirculation",
+          "description": "EGR Valve Lift Insufficient Detected",
+          "symptoms": ["Ping/knock under cruising load", "Rough engine idle"],
+          "causes": ["Defective EGR valve lift sensor", "Carbon-locked EGR pintle valve", "Damaged wiring to 5-pin EGR connector"]
+        },
+        {
+          "code": "P1705",
+          "system": "Automatic Transmission",
+          "description": "Transmission Range Switch (Short to Ground / Shift Position Mismatch)",
+          "symptoms": ["D indicator light on dash flashing", "Harsh shifting", "Inability to shift out of park without override"],
+          "causes": ["Corroded or misadjusted neutral safety / range switch on transmission housing", "Water intrusion in range switch harness"]
+        },
+        {
+          "code": "P1738",
+          "system": "Automatic Transmission Fluid Pressure",
+          "description": "2nd Clutch Transmission Fluid Pressure Switch Circuit Malfunction",
+          "symptoms": ["D4 / D light flashing", "Delayed or slipping shift into 2nd gear"],
+          "causes": ["Defective 2nd clutch oil pressure switch (located on transmission casing)", "Restricted fluid passages", "Burnt ATF fluid"]
+        },
+        {
+          "code": "61-1",
+          "system": "Chassis / ABS & VSA",
+          "description": "ABS Modulator Control Unit Low Battery Voltage",
+          "symptoms": ["ABS and BRAKE warning lights come on together"],
+          "causes": ["Battery voltage dropped below 9.5V during starter cranking", "Failing starter drawing excessive current", "Corroded main battery ground cable"]
+        }
+      ]
+    },
+    "gm": {
+      "name": "General Motors",
+      "protocols": "GMLAN (SWCAN 33.3k Pin 1), SAE J1850 VPW (Pin 2), ISO 15765-4 (CAN 500k)",
+      "codes": [
+        {
+          "code": "P1120",
+          "system": "Fuel & Throttle Actuation",
+          "description": "Throttle Position (TP) Sensor 1 Circuit Out of Range",
+          "symptoms": ["Reduced Engine Power message displayed on Driver Information Center", "Engine locked at 1500 RPM idle"],
+          "causes": ["Worn TPS potentiometer track inside throttle body", "Corroded 5V reference wire in engine harness", "Throttle actuator control (TAC) motor failure"]
+        },
+        {
+          "code": "P1133",
+          "system": "Fuel & Air Metering",
+          "description": "Heated Oxygen Sensor (HO2S) Insufficient Switching Bank 1 Sensor 1",
+          "symptoms": ["Check Engine Light", "Black soot at tailpipe", "Sluggish acceleration"],
+          "causes": ["Aged or silicon-contaminated HO2S sensor", "Exhaust manifold crack (very common on GM Vortec engines)", "Low fuel pressure"]
+        },
+        {
+          "code": "P1171",
+          "system": "Fuel Trim & Metering",
+          "description": "Fuel System Lean During Rapid Acceleration",
+          "symptoms": ["Engine stumble/bog when pressing accelerator pedal firmly"],
+          "causes": ["Weak in-tank fuel pump unable to maintain volume", "Clogged fuel filter", "Contaminated MAF hot-film sensor"]
+        },
+        {
+          "code": "P1258",
+          "system": "Engine Thermal Protection",
+          "description": "Engine Coolant Overtemperature Above 268°F - Protection Mode Active",
+          "symptoms": ["Engine enters alternate-cylinder air pumping mode", "Drastic reduction in engine power"],
+          "causes": ["Stuck-closed thermostat", "Blown head gasket", "Failed water pump impeller", "Cooling fan relay failure"]
+        },
+        {
+          "code": "P1404",
+          "system": "Exhaust Gas Recirculation",
+          "description": "EGR Valve Closed Position Performance (Pintle Not Fully Seated)",
+          "symptoms": ["Surging at steady highway speeds", "Check Engine Light"],
+          "causes": ["Hard carbon chunk lodged underneath EGR pintle valve seat", "Defective pintle position potentiometer", "Weak return spring"]
+        },
+        {
+          "code": "P1441",
+          "system": "Evaporative Emission System",
+          "description": "EVAP System Flow During Non-Purge (Purge Solenoid Stuck Open)",
+          "symptoms": ["Long crank time immediately after filling gas tank at station", "Fuel smell from under hood"],
+          "causes": ["Charcoal granules from failed EVAP canister sucked into purge valve holding it open", "Defective EVAP purge solenoid", "Vacuum hose routed incorrectly"]
+        },
+        {
+          "code": "P1516",
+          "system": "Electronic Throttle Actuation",
+          "description": "Throttle Actuator Control (TAC) Module Position Performance",
+          "symptoms": ["Immediate Reduced Engine Power mode", "Pedal input unresponsive"],
+          "causes": ["Throttle blade binding from heavy varnish/carbon build-up", "Broken TAC harness wire near alternator bracket", "Defective electronic throttle body assembly"]
+        },
+        {
+          "code": "P1626",
+          "system": "Theft Deterrent / Passlock",
+          "description": "Theft Deterrent Fuel Enable Signal Not Received (Passlock / VATS)",
+          "symptoms": ["Engine cranks, fires for 2 seconds, and immediately dies; Security indicator flashing"],
+          "causes": ["Worn ignition lock cylinder Passlock sensor", "Faulty Body Control Module (BCM)", "Lost communication on Class 2 Serial Data line"]
+        },
+        {
+          "code": "P1870",
+          "system": "Automatic Transmission (4L60-E / 4L80-E)",
+          "description": "Transmission Component Slipping (TCC Converter Slip Speed Exceeded)",
+          "symptoms": ["Harsh 1-2 upshift when transmission warms up to operating temperature"],
+          "causes": ["Worn TCC regulator valve bore inside aluminum valve body causing converter clutch slip", "Glazed torque converter lockup clutch", "Worn 2-4 servo band"]
+        },
+        {
+          "code": "U1000",
+          "system": "Network & Communication (Class 2 / GMLAN)",
+          "description": "Class 2 Communication Malfunction (Condition for Setting Comm DTC)",
+          "symptoms": ["Intermittent gauge cluster black-out", "Multiple warning chimes", "Random accessory failures"],
+          "causes": ["Corroded Splice Pack (SP205 / SP208) comb connector under dash", "Water intrusion in driver seat module or trailer module pulling Class 2 bus to ground"]
+        }
+      ]
+    },
+    "ford": {
+      "name": "Ford Motor Company",
+      "protocols": "MS-CAN (125k Pins 3 & 11), SAE J1850 PWM (Pins 2 & 10), ISO 15765-4 (CAN 500k)",
+      "codes": [
+        {
+          "code": "P1000",
+          "system": "OBD-II Readiness System",
+          "description": "OBD-II Monitor Testing Incomplete (Drive Cycle Needed)",
+          "symptoms": ["Vehicle will fail state emissions inspection; no drivability issues"],
+          "causes": ["Battery was recently disconnected or trouble codes were recently cleared", "Drive cycle requirements have not all been satisfied (EVAP and Cat monitors take specific driving conditions to run)"]
+        },
+        {
+          "code": "P1131",
+          "system": "Fuel & Air Metering",
+          "description": "Lack of Upstream Heated Oxygen Sensor Switch - Sensor Indicates Lean (Bank 1)",
+          "symptoms": ["Check Engine Light", "Pinging on hill climb", "Slight rough idle"],
+          "causes": ["Intake manifold runner control (IMRC) gasket leak", "Cracked PCV rubber elbow hose (common behind intake)", "Dirty MAF sensor"]
+        },
+        {
+          "code": "P1151",
+          "system": "Fuel & Air Metering",
+          "description": "Lack of Upstream Heated Oxygen Sensor Switch - Sensor Indicates Lean (Bank 2)",
+          "symptoms": ["Check Engine Light", "Rich compensation smell"],
+          "causes": ["Bank 2 vacuum leak", "Weak fuel pump pressure", "Exhaust header crack"]
+        },
+        {
+          "code": "P1260",
+          "system": "Anti-Theft System (PATS)",
+          "description": "THEFT Detected, Vehicle Immobilized (Passive Anti-Theft System Active)",
+          "symptoms": ["Rapidly flashing THEFT light on instrument cluster", "Engine cranks but will not start"],
+          "causes": ["Unprogrammed RFID transponder ignition key", "Defective PATS transceiver antenna ring on steering column", "PATS-PCM handshake security key synchronization lost"]
+        },
+        {
+          "code": "P1288",
+          "system": "Engine Cooling (Cylinder Head Temperature)",
+          "description": "Cylinder Head Temperature (CHT) Sensor Out of Self-Test Range",
+          "symptoms": ["Temperature gauge pegged on cold start", "Radiator high-speed fans roaring on start"],
+          "causes": ["Defective dry-well CHT sensor (screwed into cylinder head metal, does not touch coolant)", "Wiring harness chewed by rodents under intake manifold"]
+        },
+        {
+          "code": "P1450",
+          "system": "Evaporative Emission System",
+          "description": "Unable to Bleed Up Bleed Fuel Tank Vacuum (EVAP Purge Valve Stuck)",
+          "symptoms": ["Whistling noise from fuel cap area", "Fuel tank sides collapsing inward under extreme manifold vacuum", "Engine stalling at stoplights after refuel"],
+          "causes": ["Under-hood EVAP purge solenoid stuck open drawing continuous vacuum into fuel tank", "Blocked EVAP canister vent solenoid"]
+        },
+        {
+          "code": "P1633",
+          "system": "Computer Power & Memory",
+          "description": "Keep Alive Memory (KAM) Voltage Too Low",
+          "symptoms": ["Vehicle runs rough for 10 miles after every restart", "Loss of idle adaptives"],
+          "causes": ["Blown KAM / PCM unswitched power fuse in battery junction box", "Corroded PCM power diode in fuse box"]
+        },
+        {
+          "code": "P1744",
+          "system": "Automatic Transmission (Torque Converter)",
+          "description": "Torque Converter Clutch (TCC) System Mechanically Stuck In Off Position",
+          "symptoms": ["Engine RPM does not drop on highway when cruising above 50 MPH", "Transmission fluid running hot"],
+          "causes": ["Worn torque converter internal clutch lining", "Damaged TCC solenoid valve", "Cracked transmission pump stator support shaft seal"]
+        },
+        {
+          "code": "U1900",
+          "system": "CAN Bus Communication Network",
+          "description": "CAN Communication Bus Fault - Receive Error (Instrument Cluster / ABS / PCM)",
+          "symptoms": ["Speedometer drops to zero intermittently", "Dashes (-----) appear in odometer display", "ABS and Brake lights flash on bumps"],
+          "causes": ["Cracked solder joints on the main wiring connector on the back of the instrument cluster circuit board", "Corroded ABS module pin connector", "Intermittent CAN-H or CAN-L open circuit"]
+        }
+      ]
+    }
+  }
+}

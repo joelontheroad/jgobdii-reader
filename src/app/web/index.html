@@ -1,0 +1,2797 @@
+<!DOCTYPE html>
+<!--
+SPDX-FileCopyrightText: 2026 [Author/Organization]
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>jgOBDII-Reader - Autonomous OBD-II & Telemetry Engine</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --surface: #111827;
+      --card-bg: #1f2937;
+      --card-hover: #374151;
+      --text: #f9fafb;
+      --text-muted: #9ca3af;
+      --primary: #38bdf8;
+      --primary-hover: #0ea5e9;
+      --accent: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --border: #374151;
+      --focus-ring: #38bdf8;
+      --scope-grid: #1e3a5f;
+      --scope-trace: #00ff66;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f3f4f6;
+        --surface: #ffffff;
+        --card-bg: #ffffff;
+        --card-hover: #f9fafb;
+        --text: #111827;
+        --text-muted: #4b5563;
+        --primary: #0284c7;
+        --primary-hover: #0369a1;
+        --accent: #059669;
+        --warning: #d97706;
+        --danger: #dc2626;
+        --border: #e5e7eb;
+        --focus-ring: #0284c7;
+        --scope-grid: #cbd5e1;
+        --scope-trace: #047857;
+      }
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background-color: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .brand-section { display: flex; align-items: center; gap: 0.75rem; }
+    .brand-title { font-size: 1.25rem; font-weight: 700; color: var(--primary); letter-spacing: -0.02em; }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .badge-dot { width: 8px; height: 8px; border-radius: 50%; background-color: var(--accent); }
+
+    .nav-tabs {
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      background-color: var(--surface);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    .tab-btn {
+      background: none;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.15s ease;
+    }
+    .tab-btn:hover { background-color: var(--card-bg); color: var(--text); }
+    .tab-btn.active {
+      background-color: var(--card-bg);
+      color: var(--primary);
+      border-color: var(--border);
+    }
+    .tab-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+    main { flex: 1; padding: 1.5rem; max-width: 1400px; width: 100%; margin: 0 auto; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .grid-dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .card-title {
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .metric-value { font-size: 2rem; font-weight: 700; color: var(--text); }
+    .metric-unit { font-size: 0.875rem; color: var(--text-muted); margin-left: 0.25rem; font-weight: 400; }
+
+    /* Oscilloscope container */
+    .scope-card { grid-column: 1 / -1; }
+    .scope-canvas-wrapper {
+      position: relative;
+      width: 100%;
+      height: 280px;
+      background: #050b14;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-top: 0.75rem;
+    }
+    canvas { width: 100%; height: 100%; display: block; }
+
+    /* Form controls */
+    .form-group { margin-bottom: 1rem; }
+    label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.35rem; }
+    select, input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background-color: var(--surface);
+      color: var(--text);
+      font-size: 0.875rem;
+    }
+    select:focus, input:focus { outline: 2px solid var(--focus-ring); }
+    .btn {
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: background-color 0.15s ease;
+    }
+    .btn-primary { background-color: var(--primary); color: #000; }
+    .btn-primary:hover { background-color: var(--primary-hover); }
+    .btn-danger { background-color: var(--danger); color: #fff; }
+    .btn-outline { background: transparent; border-color: var(--border); color: var(--text); }
+
+    /* Table styles */
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.875rem; }
+    th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--text-muted); font-weight: 600; }
+
+    /* 16-Pin Connector SVG and Visualizer */
+    .connector-svg-container {
+      background: #070d18;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 0.5rem;
+      margin: 1.25rem 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.6);
+    }
+    .pin-terminal {
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .pin-terminal:hover .pin-slot-bg {
+      filter: brightness(1.35);
+      stroke: var(--primary);
+      stroke-width: 2.5px;
+    }
+    .pin-terminal.active .pin-slot-bg {
+      stroke: #38bdf8 !important;
+      stroke-width: 3.5px !important;
+      filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.9));
+    }
+    .pin-detail-card {
+      padding: 1.25rem;
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin: 1rem 0;
+    }
+    .pin-detail-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .pin-badge {
+      background: rgba(56, 189, 248, 0.2);
+      color: var(--primary);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      padding: 0.25rem 0.65rem;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 0.875rem;
+    }
+    .pin-detail-text {
+      color: var(--text);
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      margin-bottom: 0.75rem;
+    }
+    .pin-detail-notes {
+      font-size: 0.875rem;
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      background: rgba(245, 158, 11, 0.12);
+      border-left: 4px solid var(--warning);
+      color: var(--text);
+    }
+    .pinout-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 0.5rem;
+      margin: 1.25rem 0;
+    }
+    .pin-box {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem;
+      text-align: center;
+      background-color: var(--surface);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .pin-box:hover { border-color: var(--primary); transform: translateY(-2px); }
+    .pin-box.active { border-color: var(--primary); outline: 2px solid var(--primary); background: rgba(56, 189, 248, 0.1); }
+    .pin-box.standard { border-left: 4px solid var(--accent); }
+    .pin-box.vendor { border-left: 4px solid var(--warning); }
+    .pin-num { font-weight: 700; font-size: 1.1rem; }
+    .pin-lbl { font-size: 0.65rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Sub-navigation tabs for Reference and Scopes */
+    .subnav-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .subnav-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 0.4rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.15s ease;
+    }
+    .subnav-btn:hover { background-color: var(--card-bg); color: var(--text); }
+    .subnav-btn.active {
+      background-color: var(--primary);
+      color: #000;
+      border-color: var(--primary);
+      font-weight: 600;
+    }
+    .ref-subpanel { display: none; }
+    .ref-subpanel.active { display: block; }
+
+    .scopes-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+      margin-top: 1rem;
+    }
+    @media (min-width: 950px) {
+      .scopes-grid.multi {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .chip-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .chip-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .chip-btn.active { background: rgba(56, 189, 248, 0.2); border-color: var(--primary); color: var(--primary); font-weight: 600; }
+
+
+    /* Modal Dialogs */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      padding: 1rem;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+    .modal-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      width: 100%;
+      max-width: 900px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--surface);
+    }
+    .modal-body {
+      padding: 1.25rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .modal-footer {
+      padding: 0.75rem 1.25rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      background: var(--surface);
+    }
+    .palette-filter-bar {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+
+    footer {
+      background-color: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 1rem 1.5rem;
+      text-align: center;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+    }
+    footer a, header a { color: var(--primary); text-decoration: none; }
+    footer a:hover, header a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand-section">
+      <div class="brand-title">jgOBDII-Reader</div>
+      <div class="status-badge" id="connBadge">
+        <span class="badge-dot" id="connDot"></span>
+        <span id="connLabel">Connected (ELM327 Wi-Fi)</span>
+      </div>
+      <div class="status-badge" style="background: rgba(56, 189, 248, 0.15); color: var(--primary); border-color: rgba(56, 189, 248, 0.3);">
+        <span id="vehicleLabel">Passenger Car (CAN 500k)</span>
+      </div>
+      <div class="status-badge" id="hwStatusBadge" style="background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border-color: rgba(148, 163, 184, 0.3);">
+        <span class="badge-dot" id="hwStatusDot" style="background-color: #94a3b8;"></span>
+        <span id="hwStatusText">Scanning Hardware...</span>
+      </div>
+    </div>
+    <div>
+      <a href="https://github.com/joelontheroad/jgobdii-reader" target="_blank" rel="noopener noreferrer">Source Code (GNU AGPLv3)</a>
+    </div>
+  </header>
+
+  <nav class="nav-tabs" role="tablist">
+    <button class="tab-btn active" id="tab-btn-scope" role="tab" aria-selected="true" onclick="openTab('tab-scope')">⚡ Live Data (Mode 01)</button>
+    <button class="tab-btn" role="tab" aria-selected="false" onclick="openTab('tab-mfg')">🏢 Manufacturer Enhanced</button>
+    <button class="tab-btn" role="tab" aria-selected="false" onclick="openTab('tab-can')">📡 CAN Bus Explorer</button>
+    <button class="tab-btn" role="tab" aria-selected="false" onclick="openTab('tab-dtc')">🔍 Diagnostic DTCs</button>
+    <button class="tab-btn" role="tab" aria-selected="false" onclick="openTab('tab-ref')">📚 Reference</button>
+    <button class="tab-btn" role="tab" aria-selected="false" onclick="openTab('tab-settings')">⚙️ Settings & Presets</button>
+  </nav>
+
+  <main>
+    <!-- TAB 1: Oscilloscope & Telemetry Gauges -->
+    <section id="tab-scope" class="tab-content active" role="tabpanel">
+      <!-- Gauge Customizer Controls -->
+      <div class="card" style="margin-bottom: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h3 style="font-size: 1rem; color: var(--primary);">Live Telemetry Gauges (Mode 01)</h3>
+            <p style="color: var(--text-muted); font-size: 0.8125rem;">Choose which standardized or enhanced sensor gauges to display on the dashboard:</p>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn btn-primary" style="padding: 0.35rem 0.85rem; font-size: 0.8125rem;" onclick="openSensorPalette()" id="btnOpenSensorPalette">🔍 Sensor Palette & PID Browser...</button>
+            <label for="gaugeSelector" style="font-size: 0.8125rem; margin: 0; font-weight: 600;">Quick Toggle:</label>
+            <select id="gaugeSelector" style="max-width: 230px;" onchange="toggleGaugeVisibility(this.value)">
+              <option value="">-- Quick Toggle Sensor --</option>
+              <optgroup label="Engine Dynamics">
+                <option value="card-rpm">Engine Speed (RPM) [0C]</option>
+                <option value="card-speed">Vehicle Speed (km/h) [0D]</option>
+                <option value="card-vss-hz">Derived VSS Frequency (Hz)</option>
+                <option value="card-throttle">Throttle Position (%) [11]</option>
+                <option value="card-load">Engine Calculated Load (%) [04]</option>
+              </optgroup>
+              <optgroup label="Fuel & Air Metering">
+                <option value="card-maf">Mass Air Flow (g/s) [10]</option>
+                <option value="card-stft">Short Term Fuel Trim (%) [06]</option>
+                <option value="card-ltft">Long Term Fuel Trim (%) [07]</option>
+                <option value="card-fuel-press">Fuel Pressure (kPa) [0A]</option>
+              </optgroup>
+              <optgroup label="Temperatures">
+                <option value="card-coolant">Engine Coolant Temp (°C) [05]</option>
+                <option value="card-iat">Intake Air Temp (°C) [0F]</option>
+                <option value="card-ambient-temp">Ambient Air Temp (°C) [46]</option>
+                <option value="card-oil-temp">Engine Oil Temp (°C) [5C]</option>
+              </optgroup>
+              <optgroup label="Oxygen Sensors & Electrical">
+                <option value="card-o2">Oxygen Sensor 1 Voltage (V) [14]</option>
+                <option value="card-ctrl-mod-volt">Control Module Voltage (V) [42]</option>
+              </optgroup>
+            </select>
+            <button class="btn btn-outline" style="padding: 0.35rem 0.75rem; font-size: 0.75rem;" onclick="resetAllGauges(true)">Show All</button>
+            <button class="btn btn-outline" style="padding: 0.35rem 0.75rem; font-size: 0.75rem;" onclick="resetAllGauges(false)">Minimal (4)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Metric Cards Dashboard -->
+      <div class="grid-dashboard" id="gaugesDashboard">
+        <div class="card" id="card-rpm">
+          <div class="card-title">Engine Speed (RPM) <button class="btn btn-outline" style="padding: 0 4px; font-size: 0.7rem; border: none;" onclick="hideGauge('card-rpm')" title="Hide gauge">✕</button></div>
+          <div class="metric-value" id="valRpm">--<span class="metric-unit">RPM</span></div>
+        </div>
+        <div class="card" id="card-speed">
+          <div class="card-title">Vehicle Speed <button class="btn btn-outline" style="padding: 0 4px; font-size: 0.7rem; border: none;" onclick="hideGauge('card-speed')" title="Hide gauge">✕</button></div>
+          <div class="metric-value" id="valSpeed">--<span class="metric-unit">km/h</span></div>
+        </div>
+        <div class="card" id="card-vss-hz">
+          <div class="card-title">Derived VSS Frequency <button class="btn btn-outline" style="padding: 0 4px; font-size: 0.7rem; border: none;" onclick="hideGauge('card-vss-hz')" title="Hide gauge">✕</button></div>
+          <div class="metric-value" style="color: var(--primary);" id="valVssHz">--<span class="metric-unit">Hz</span></div>
+        </div>
+        <div class="card" id="card-coolant">
+          <div class="card-title">Coolant Temperature <button class="btn btn-outline" style="padding: 0 4px; font-size: 0.7rem; border: none;" onclick="hideGauge('card-coolant')" title="Hide gauge">✕</button></div>
+          <div class="metric-value" id="valCoolant">--<span class="metric-unit">°C</span></div>
+        </div>
+        <div class="card" id="card-throttle">
+          <div class="card-title">Throttle Position <button class="btn btn-outline" style="padding: 0 4px; font-size: 0.7rem; border: none;" onclick="hideGauge('card-throttle')" title="Hide gauge">✕</button></div>
+          <div class="metric-value" id="valThrottle">--<span class="metric-unit">%</span></div>
+        </div>
+        <div class="card" id="card-maf">
+          <div class="card-title">Mass Air Flow (MAF) <button class="btn btn-outline" style="padding: 0 4px; font-size: 0.7rem; border: none;" onclick="hideGauge('card-maf')" title="Hide gauge">✕</button></div>
+          <div class="metric-value" id="valMaf">--<span class="metric-unit">g/s</span></div>
+        </div>
+        <div class="card" id="card-load" style="display: none;">
+          <div class="card-title">Engine Calculated Load <button class="btn btn-outline" style="padding: 0 4px; font-size: 0.7rem; border: none;" onclick="hideGauge('card-load')" title="Hide gauge">✕</button></div>
+          <div class="metric-value" id="valLoad">--<span class="metric-unit">%</span></div>
+        </div>
+        <div class="card" id="card-iat" style="display: none;">
+          <div class="card-title">Intake Air Temp (IAT) <button class="btn btn-outline" style="padding: 0 4px; font-size: 0.7rem; border: none;" onclick="hideGauge('card-iat')" title="Hide gauge">✕</button></div>
+          <div class="metric-value" id="valIat">--<span class="metric-unit">°C</span></div>
+        </div>
+        <div class="card" id="card-stft" style="display: none;">
+          <div class="card-title">Short Term Fuel Trim <button class="btn btn-outline" style="padding: 0 4px; font-size: 0.7rem; border: none;" onclick="hideGauge('card-stft')" title="Hide gauge">✕</button></div>
+          <div class="metric-value" id="valStft">--<span class="metric-unit">%</span></div>
+        </div>
+        <div class="card" id="card-o2" style="display: none;">
+          <div class="card-title">Oxygen Sensor 1 Voltage <button class="btn btn-outline" style="padding: 0 4px; font-size: 0.7rem; border: none;" onclick="hideGauge('card-o2')" title="Hide gauge">✕</button></div>
+          <div class="metric-value" id="valO2">--<span class="metric-unit">V</span></div>
+        </div>
+      </div>
+
+      <!-- Oscilloscope Section Header & Controls -->
+      <div class="card" style="margin-bottom: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h3 style="font-size: 1rem; color: var(--accent);">Multi-Channel Live Oscilloscopes (Mode 01 Waveforms)</h3>
+            <p style="color: var(--text-muted); font-size: 0.8125rem;">Simultaneously render up to 5 live signal oscilloscopes with independent sweeps. Assign any sensor via the dropdown or the <a href="javascript:void(0)" onclick="openSensorPalette()" style="color: var(--primary); text-decoration: underline;">Sensor Palette</a>:</p>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <label for="scopeCountSelect" style="font-size: 0.8125rem; margin: 0; font-weight: 600;">Active Scopes:</label>
+            <select id="scopeCountSelect" style="width: 140px;" onchange="setScopeCount(parseInt(this.value, 10))">
+              <option value="1">1 Oscilloscope</option>
+              <option value="2">2 Oscilloscopes</option>
+              <option value="3">3 Oscilloscopes</option>
+              <option value="4">4 Oscilloscopes</option>
+              <option value="5">5 Oscilloscopes</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Up to 5 Live Scopes Grid Container -->
+      <div id="scopesGrid" class="scopes-grid">
+        <!-- Rendered dynamically by initScopes() -->
+      </div>
+    </section>
+
+    <!-- TAB 2: Manufacturer Enhanced Telemetry -->
+    <section id="tab-mfg" class="tab-content" role="tabpanel">
+      <div class="card" style="margin-bottom: 1.25rem;">
+        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+          <label for="mfgSelect" style="font-weight: 600; margin: 0;">Select Vehicle Manufacturer:</label>
+          <select id="mfgSelect" style="max-width: 240px;" onchange="loadManufacturerData()">
+            <option value="toyota">Toyota / Lexus (Hybrid & ATF)</option>
+            <option value="honda">Honda / Acura (VTEC & ABS)</option>
+            <option value="gm">General Motors (Misfires & Trans)</option>
+            <option value="ford">Ford (CHT & Boost)</option>
+          </select>
+          <button class="btn btn-primary" onclick="loadManufacturerData()">Poll Enhanced Parameters</button>
+        </div>
+      </div>
+
+      <div class="grid-dashboard" id="mfgContainer">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- TAB 3: CAN Bus Packet Explorer -->
+    <section id="tab-can" class="tab-content" role="tabpanel">
+      <!-- SocketCAN Hardware Detection Banner -->
+      <div id="canHwAlertBanner" class="card" style="margin-bottom: 1.25rem; border-left: 4px solid var(--warning); background: rgba(245, 158, 11, 0.08); display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
+          <div>
+            <h4 id="canHwBannerTitle" style="color: var(--warning); margin-bottom: 0.25rem;">⚠️ No Physical CAN Cable Detected</h4>
+            <p id="canHwBannerDesc" style="color: var(--text-muted); font-size: 0.8125rem;">
+              Connect a physical USB-to-CAN adapter (e.g. <strong>CANable / Candlelight</strong>, <strong>PEAK PCAN-USB</strong>) or create a virtual CAN interface with <code>sudo modprobe vcan && sudo ip link add dev vcan0 type vcan && sudo ip link set up vcan0</code> for loopback testing.
+            </p>
+          </div>
+          <button class="btn btn-outline" style="font-size: 0.75rem;" onclick="checkHardwareStatus(true)">Re-scan Hardware</button>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom: 1rem;">
+        <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 200px;">
+            <label for="canFilterInput">CAN ID Filter (Hex, e.g. 7E8 or 201):</label>
+            <input type="text" id="canFilterInput" placeholder="Leave empty for all frames">
+          </div>
+          <div>
+            <label for="canCountInput">Frame Capture Count:</label>
+            <input type="number" id="canCountInput" value="10" min="1" max="100" style="width: 100px;">
+          </div>
+          <div style="align-self: flex-end;">
+            <button class="btn btn-primary" onclick="pollCanFrames()">Capture CAN Stream</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Live High-Speed CAN Frames (Pins 6 & 14)</div>
+        <table>
+          <thead>
+            <tr>
+              <th>CAN ID</th>
+              <th>EXTENDED</th>
+              <th>DLC</th>
+              <th>DATA BYTES (HEX)</th>
+              <th>TIMESTAMP</th>
+            </tr>
+          </thead>
+          <tbody id="canTableBody">
+            <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No frames captured yet. Click 'Capture CAN Stream'.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 4: Diagnostic DTCs & Simulator Fault Injection -->
+    <section id="tab-dtc" class="tab-content" role="tabpanel">
+      <!-- Mock Simulator Fault Injection Console -->
+      <div class="card" style="margin-bottom: 1.5rem; border-left: 4px solid var(--accent);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div>
+            <h3 style="font-size: 1rem; color: var(--accent);">Mock Simulator Fault Injection & Testing Console</h3>
+            <p style="color: var(--text-muted); font-size: 0.8125rem;">Inject diagnostic trouble codes into the mock adapter simulator to test ECU code detection, cluster correlation, and clearing.</p>
+          </div>
+          <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: var(--accent);">Simulator Ready</span>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1rem;">
+          <div style="flex: 2; min-width: 220px;">
+            <label for="injectDtcInput">Diagnostic Trouble Code(s) (comma or space separated):</label>
+            <input type="text" id="injectDtcInput" placeholder="e.g. P0171, P0300, P0420" value="">
+          </div>
+          <div style="flex: 1; min-width: 150px;">
+            <label for="injectModeSelect">Diagnostic Service Mode:</label>
+            <select id="injectModeSelect">
+              <option value="03">Mode 03 (Confirmed / Stored)</option>
+              <option value="07">Mode 07 (Pending Faults)</option>
+              <option value="0A">Mode 0A (Permanent Faults)</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="injectCustomDtc()">Inject Code(s)</button>
+        </div>
+
+        <!-- Realistic Failure Presets -->
+        <div style="margin-bottom: 0.75rem;">
+          <label style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">Simulate Realistic Fault Clusters:</label>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.35rem;">
+            <button class="chip-btn" onclick="injectPresetCluster('lean_misfire')">⚡ System Too Lean & Misfire (P0171, P0300)</button>
+            <button class="chip-btn" onclick="injectPresetCluster('catalyst')">⚡ Catalyst Efficiency Below Threshold (P0420)</button>
+            <button class="chip-btn" onclick="injectPresetCluster('maf_sensor')">⚡ MAF Sensor Circuit Malfunction (P0100, P0101)</button>
+            <button class="chip-btn" onclick="injectPresetCluster('evap_leak')">⚡ EVAP Gross Vapor Leak (P0442, P0455)</button>
+            <button class="chip-btn" onclick="injectPresetCluster('cooling')">⚡ Engine Coolant Circuit Range (P0115)</button>
+          </div>
+        </div>
+
+        <!-- Simulator State Actions -->
+        <div style="display: flex; gap: 0.5rem; justify-content: flex-end; border-top: 1px solid var(--border); padding-top: 0.75rem; flex-wrap: wrap;">
+          <button class="btn btn-outline" style="font-size: 0.8125rem;" onclick="resetMockSimulatorDtcs()">Reset Factory Mock Codes</button>
+          <button class="btn btn-outline" style="font-size: 0.8125rem; color: var(--danger); border-color: rgba(239, 68, 68, 0.4);" onclick="clearMockSimulatorDtcs()">Clear All Simulator Codes</button>
+        </div>
+        <div id="injectStatusMsg" style="font-size: 0.8125rem; color: var(--accent); margin-top: 0.5rem; display: none;"></div>
+      </div>
+
+      <!-- Live ECU Fault Inspection Header -->
+      <div class="card" style="margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h3>Active Diagnostic Trouble Codes (ECU Readout)</h3>
+            <p style="color: var(--text-muted); font-size: 0.875rem;">Polls confirmed emissions faults (Mode 03) and pending faults (Mode 07) from the active adapter.</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-outline" onclick="loadDtcs()">Refresh Codes</button>
+            <button class="btn btn-danger" onclick="openClearDtcModal()">Clear DTCs & Reset (Mode 04)</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="dtcListContainer">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- I/M Readiness Monitors Panel (Mode 01 PID 01) -->
+      <div class="card" style="margin-top: 1.5rem; margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem;">
+          <div>
+            <h3 style="font-size: 1.05rem; color: var(--primary);">Inspection & Maintenance (I/M) Readiness Monitors (Mode 01 PID 01)</h3>
+            <p style="color: var(--text-muted); font-size: 0.8125rem;">Emissions diagnostic system monitor flags. Green badges indicate completed drive cycle tests.</p>
+          </div>
+          <button class="btn btn-outline" style="font-size: 0.8125rem;" onclick="loadImReadiness()">Refresh Readiness</button>
+        </div>
+        <div id="imSummaryRow" style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+          <!-- Rendered dynamically: MIL Lamp & DTC Count -->
+        </div>
+        <div id="imMonitorsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem;">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Mode 02 Freeze Frame Telemetry Snapshot -->
+      <div class="card" style="margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem;">
+          <div>
+            <h3 style="font-size: 1.05rem; color: var(--accent);">Mode 02 Freeze Frame Telemetry Snapshot</h3>
+            <p style="color: var(--text-muted); font-size: 0.8125rem;">ECU sensor values frozen at the exact millisecond the fault code was recorded.</p>
+          </div>
+          <button class="btn btn-outline" style="font-size: 0.8125rem;" onclick="loadFreezeFrame()">Read Freeze Frame</button>
+        </div>
+        <div id="freezeFrameContent">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Mode 05 Oxygen Sensor Monitor Test Results (Legacy Vehicles) -->
+      <div class="card" style="margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem;">
+          <div>
+            <h3 style="font-size: 1.05rem; color: var(--accent);">Mode 05 Oxygen Sensor Monitor Results (Legacy ISO/VPW/PWM)</h3>
+            <p style="color: var(--text-muted); font-size: 0.8125rem;">Pre-CAN OBD-II oxygen sensor switch points, reaction times, and test limits.</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <label for="mode05TidSelect" style="font-size: 0.8125rem; margin: 0; font-weight: 600;">Test ID (TID):</label>
+            <select id="mode05TidSelect" style="width: 240px;" onchange="loadMode05()">
+              <option value="1">TID 01: Rich-to-Lean Sensor Threshold (V)</option>
+              <option value="2">TID 02: Lean-to-Rich Sensor Threshold (V)</option>
+              <option value="3">TID 03: Low Sensor Voltage for Switch Time (V)</option>
+              <option value="4">TID 04: High Sensor Voltage for Switch Time (V)</option>
+              <option value="5">TID 05: Rich-to-Lean Switch Time (s)</option>
+              <option value="6">TID 06: Lean-to-Rich Switch Time (s)</option>
+              <option value="7">TID 07: Min Sensor Voltage for Test Cycle (V)</option>
+              <option value="8">TID 08: Max Sensor Voltage for Test Cycle (V)</option>
+              <option value="9">TID 09: Time Between Transitions (s)</option>
+              <option value="10">TID 0A: Sensor Period (s)</option>
+            </select>
+            <button class="btn btn-outline" style="font-size: 0.8125rem;" onclick="loadMode05()">Query Mode 05</button>
+          </div>
+        </div>
+        <div id="mode05Content">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Mode 06 On-Board Diagnostic Component Monitoring -->
+      <div class="card" style="margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem;">
+          <div>
+            <h3 style="font-size: 1.05rem; color: var(--text);">Mode 06 On-Board Component Monitoring (Non-Continuous Tests)</h3>
+            <p style="color: var(--text-muted); font-size: 0.8125rem;">Manufacturer pass/fail test results for catalytic converter, oxygen sensor switch times, and EVAP vacuum decay.</p>
+          </div>
+          <button class="btn btn-outline" style="font-size: 0.8125rem;" onclick="loadMode06()">Run Mode 06 Tests</button>
+        </div>
+        <div id="mode06Content">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Mode 09 Vehicle Identification Data -->
+      <div class="card" style="margin-bottom: 1.5rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem;">
+          <div>
+            <h3 style="font-size: 1.05rem; color: var(--text-muted);">Mode 09 Vehicle Identification & Calibration Data</h3>
+            <p style="color: var(--text-muted); font-size: 0.8125rem;">VIN, Calibration ID (CALID), and Calibration Verification Number (CVN).</p>
+          </div>
+          <button class="btn btn-outline" style="font-size: 0.8125rem;" onclick="loadVin()">Query Mode 09</button>
+        </div>
+        <div id="mode09Content">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: Reference -->
+    <section id="tab-ref" class="tab-content" role="tabpanel">
+      <!-- Reference Sub-navigation Tabs -->
+      <div class="subnav-tabs">
+        <button class="subnav-btn active" id="btn-ref-sae" onclick="openRefSubtab('ref-sub-sae')">📖 Standard SAE DTC Directory</button>
+        <button class="subnav-btn" id="btn-ref-mfg" onclick="openRefSubtab('ref-sub-mfg')">🏢 Manufacturer-Specific DTCs</button>
+        <button class="subnav-btn" id="btn-ref-can" onclick="openRefSubtab('ref-sub-can')">📡 CAN Bus Technical Architecture</button>
+        <button class="subnav-btn" id="btn-ref-decode" onclick="openRefSubtab('ref-sub-decode')">🔍 Decoding OBD-II Codes</button>
+        <button class="subnav-btn" id="btn-ref-pins" onclick="openRefSubtab('ref-sub-pins')">🔌 16-Pin Connector Map</button>
+      </div>
+
+      <!-- SUBTAB 2: Standard SAE DTC Directory -->
+      <div id="ref-sub-sae" class="ref-subpanel active">
+        <div class="card" style="margin-bottom: 1.25rem;">
+          <h3 style="font-size: 1.1rem; color: var(--primary); margin-bottom: 0.5rem;">SAE J2012 Standard DTC Reference Database</h3>
+          <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1rem;">Browse and search standard OBD-II trouble codes with diagnostic symptoms and causes.</p>
+          
+          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem;">
+            <div style="flex: 2; min-width: 250px;">
+              <label for="saeSearchInput" style="font-size: 0.8125rem;">Search Code, Description, or Failure Mode:</label>
+              <input type="text" id="saeSearchInput" placeholder="Filter 9,400+ codes by number or keyword (e.g. P0420, Oxygen, Lean, MAF)..." oninput="filterSaeDtcs()">
+            </div>
+            <div style="flex: 1; min-width: 220px; padding-bottom: 0.35rem;">
+              <label style="display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; font-weight: 600; cursor: pointer; color: var(--accent);">
+                <input type="checkbox" id="saeSupportedOnlyCheckbox" onchange="filterSaeDtcs()" style="width: auto;">
+                <span>⭐ Show Only Vehicle-Supported DTCs</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- System Filter Chips -->
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+            <span style="font-size: 0.8125rem; font-weight: 600; color: var(--text-muted);">System Filter:</span>
+            <button class="chip-btn active" id="chip-sys-all" onclick="setSaeSystemFilter('')">All Systems</button>
+            <button class="chip-btn" id="chip-sys-p" onclick="setSaeSystemFilter('Powertrain')">Powertrain (P)</button>
+            <button class="chip-btn" id="chip-sys-c" onclick="setSaeSystemFilter('Chassis')">Chassis (C)</button>
+            <button class="chip-btn" id="chip-sys-b" onclick="setSaeSystemFilter('Body')">Body (B)</button>
+            <button class="chip-btn" id="chip-sys-u" onclick="setSaeSystemFilter('Network')">Network / CAN (U)</button>
+          </div>
+        </div>
+
+        <div id="saeDtcResultsContainer">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- SUBTAB 3: Manufacturer-Specific DTCs -->
+      <div id="ref-sub-mfg" class="ref-subpanel">
+        <div class="card" style="margin-bottom: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.75rem;">
+            <div>
+              <h3 style="font-size: 1.1rem; color: var(--accent);">Manufacturer-Specific Diagnostic Codes</h3>
+              <p style="color: var(--text-muted); font-size: 0.875rem;">OEM fault codes, proprietary protocols, and failure modes for major automakers.</p>
+            </div>
+          </div>
+
+          <!-- Search input for 30,000+ OEM codes -->
+          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem;">
+            <div style="flex: 2; min-width: 250px;">
+              <label for="mfgSearchInput" style="font-size: 0.8125rem;">Search Manufacturer Diagnostic Trouble Codes:</label>
+              <input type="text" id="mfgSearchInput" placeholder="Filter 31,000+ OEM codes by number or text (e.g. P1130, VVT, Boost, Valve)..." oninput="filterMfgDtcs()">
+            </div>
+            <div style="flex: 1; min-width: 220px; padding-bottom: 0.35rem;">
+              <label style="display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; font-weight: 600; cursor: pointer; color: var(--accent);">
+                <input type="checkbox" id="mfgSupportedOnlyCheckbox" onchange="filterMfgDtcs()" style="width: auto;">
+                <span>⭐ Show Only Vehicle-Supported DTCs</span>
+              </label>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem;">
+            <button class="subnav-btn active" id="btn-mfg-toyota" onclick="switchMfgReference('toyota')">Toyota / Lexus</button>
+            <button class="subnav-btn" id="btn-mfg-bmw" onclick="switchMfgReference('bmw')">BMW / Mini (4,781 codes)</button>
+            <button class="subnav-btn" id="btn-mfg-volkswagen" onclick="switchMfgReference('volkswagen')">VW / Audi (9,137 codes)</button>
+            <button class="subnav-btn" id="btn-mfg-gm" onclick="switchMfgReference('gm')">General Motors (5,325 codes)</button>
+            <button class="subnav-btn" id="btn-mfg-ford" onclick="switchMfgReference('ford')">Ford (3,315 codes)</button>
+            <button class="subnav-btn" id="btn-mfg-mitsubishi" onclick="switchMfgReference('mitsubishi')">Mitsubishi (3,998 codes)</button>
+            <button class="subnav-btn" id="btn-mfg-nissan" onclick="switchMfgReference('nissan')">Nissan (3,409 codes)</button>
+            <button class="subnav-btn" id="btn-mfg-chrysler" onclick="switchMfgReference('chrysler')">Chrysler (665 codes)</button>
+            <button class="subnav-btn" id="btn-mfg-honda" onclick="switchMfgReference('honda')">Honda (367 codes)</button>
+            <button class="subnav-btn" id="btn-mfg-fiat" onclick="switchMfgReference('fiat')">Fiat (246 codes)</button>
+            <button class="subnav-btn" id="btn-mfg-alfaromeo" onclick="switchMfgReference('alfaromeo')">Alfa Romeo (29 codes)</button>
+          </div>
+
+          <div id="mfgProtocolBanner" class="pin-detail-notes" style="margin-bottom: 1rem;"></div>
+        </div>
+
+        <div id="mfgDtcResultsContainer">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- SUBTAB 4: CAN Bus Technical Architecture -->
+      <div id="ref-sub-can" class="ref-subpanel">
+        <div class="grid-dashboard" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
+          <!-- Physical Layer Card -->
+          <div class="card">
+            <h4 style="color: var(--primary); margin-bottom: 0.5rem;">ISO 11898-2 Physical Layer</h4>
+            <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.75rem;">Two-wire balanced differential signaling designed for high-noise automotive environments:</p>
+            <table style="margin-top: 0;">
+              <tr><th>Line</th><th>Recessive (Bit 1)</th><th>Dominant (Bit 0)</th></tr>
+              <tr><td><strong>CAN High (Pin 6)</strong></td><td>2.50 V</td><td>3.50 V</td></tr>
+              <tr><td><strong>CAN Low (Pin 14)</strong></td><td>2.50 V</td><td>1.50 V</td></tr>
+              <tr><td><strong>Differential (Vdiff)</strong></td><td>0.00 V</td><td>2.00 V</td></tr>
+            </table>
+            <div style="margin-top: 0.75rem; font-size: 0.8125rem; color: var(--warning); background: rgba(245, 158, 11, 0.1); padding: 0.5rem; border-radius: 4px;">
+              ⚡ <strong>Termination Resistors:</strong> 120 Ω at each end of the bus. Measured loop resistance between Pin 6 and Pin 14 is <strong>60 Ω</strong> with vehicle battery disconnected.
+            </div>
+          </div>
+
+          <!-- Standard Baud Rates Card -->
+          <div class="card">
+            <h4 style="color: var(--accent); margin-bottom: 0.5rem;">Automotive Bus Topologies & Baud Rates</h4>
+            <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.75rem;">Standard protocols and pin assignments across manufacturers:</p>
+            <ul style="font-size: 0.875rem; line-height: 1.7; padding-left: 1.25rem;">
+              <li><strong>High-Speed CAN (HS-CAN):</strong> 500 kbps (Pins 6 & 14) — Engine, Transmission, ABS/Stability.</li>
+              <li><strong>Commercial / Heavy Duty:</strong> 250 kbps (SAE J1939) — Medium/Heavy Duty Trucks & Marine.</li>
+              <li><strong>Ford Medium-Speed CAN (MS-CAN):</strong> 125 kbps (Pins 3 & 11) — Instrument Cluster, HVAC, Body.</li>
+              <li><strong>GM Single-Wire CAN (GMLAN / SWCAN):</strong> 33.3 kbps (Pin 1) — Infotainment, Doors, Lighting.</li>
+            </ul>
+          </div>
+
+          <!-- Classical Frame Anatomy Card -->
+          <div class="card">
+            <h4 style="color: var(--text); margin-bottom: 0.5rem;">Classical CAN Frame Anatomy</h4>
+            <table style="margin-top: 0;">
+              <tr><th>Field</th><th>Bits</th><th>Description</th></tr>
+              <tr><td><strong>SOF</strong></td><td>1 bit</td><td>Start of Frame (Dominant 0) synchronization</td></tr>
+              <tr><td><strong>Arbitration ID</strong></td><td>11 or 29 bits</td><td>Message identifier & bus priority</td></tr>
+              <tr><td><strong>RTR</strong></td><td>1 bit</td><td>Remote Transmission Request</td></tr>
+              <tr><td><strong>Control / DLC</strong></td><td>4 bits</td><td>Data Length Code (0 to 8 data bytes)</td></tr>
+              <tr><td><strong>Data Field</strong></td><td>0–64 bits</td><td>0 to 8 bytes payload (ISO-TP diagnostic bytes)</td></tr>
+              <tr><td><strong>CRC & Delim</strong></td><td>16 bits</td><td>Cyclic Redundancy Check error detection</td></tr>
+              <tr><td><strong>ACK & EOF</strong></td><td>9 bits</td><td>Receiver Acknowledgement & End of Frame</td></tr>
+            </table>
+          </div>
+
+          <!-- Diagnostic Addressing Card -->
+          <div class="card">
+            <h4 style="color: var(--primary); margin-bottom: 0.5rem;">OBD-II CAN Addressing Standard (ISO 15765-4)</h4>
+            <table style="margin-top: 0;">
+              <tr><th>CAN ID (Hex)</th><th>Type</th><th>Target Automotive Subsystem</th></tr>
+              <tr><td><strong>0x7DF</strong></td><td>Functional Broadcast</td><td>Broadcast query (All ECUs on the bus respond)</td></tr>
+              <tr><td><strong>0x7E0 / 0x7E8</strong></td><td>Physical Request / Response</td><td>Engine Control Module (ECM / PCM)</td></tr>
+              <tr><td><strong>0x7E1 / 0x7E9</strong></td><td>Physical Request / Response</td><td>Transmission Control Module (TCM)</td></tr>
+              <tr><td><strong>0x7E2 / 0x7EA</strong></td><td>Physical Request / Response</td><td>Hybrid Battery Management / Electronic Control</td></tr>
+              <tr><td><strong>0x7E3 / 0x7EB</strong></td><td>Physical Request / Response</td><td>Secondary Hybrid ECU / Four-Wheel Drive Controller</td></tr>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUBTAB 5: Decoding OBD-II Codes Interactive Reference -->
+      <div id="ref-sub-decode" class="ref-subpanel">
+        <!-- Interactive Breakdown Widget -->
+        <div class="card" style="margin-bottom: 1.5rem; border-left: 4px solid var(--primary);">
+          <h3 style="font-size: 1.15rem; color: var(--primary); margin-bottom: 0.5rem;">Interactive OBD-II Diagnostic Trouble Code Decoder</h3>
+          <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1rem;">
+            Every standard OBD-II trouble code consists of five characters structured into four distinct engineering components per SAE J2012 / ISO 15031-6 standards. Type any code below to decompose its anatomy in real time:
+          </p>
+
+          <div style="display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1rem;">
+            <div style="flex: 1; min-width: 200px;">
+              <label for="decodeInputCode" style="font-weight: 600;">Enter 5-Character Trouble Code:</label>
+              <input type="text" id="decodeInputCode" value="P0420" maxlength="5" style="font-size: 1.25rem; font-family: monospace; letter-spacing: 3px; text-transform: uppercase;" oninput="runInteractiveDecoder(this.value)">
+            </div>
+            <button class="btn btn-primary" onclick="runInteractiveDecoder(document.getElementById('decodeInputCode').value)">Deconstruct Code</button>
+          </div>
+
+          <!-- Quick Test Presets -->
+          <div style="margin-bottom: 1.25rem;">
+            <span style="font-size: 0.8125rem; color: var(--text-muted); font-weight: 600;">Sample Codes to Explore:</span>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.35rem;">
+              <button class="chip-btn" onclick="selectSampleDecode('P0420')">P0420 (Catalyst Efficiency)</button>
+              <button class="chip-btn" onclick="selectSampleDecode('P0171')">P0171 (System Too Lean)</button>
+              <button class="chip-btn" onclick="selectSampleDecode('P0300')">P0300 (Random Misfire)</button>
+              <button class="chip-btn" onclick="selectSampleDecode('P1135')">P1135 (Toyota OEM A/F Heater)</button>
+              <button class="chip-btn" onclick="selectSampleDecode('C1234')">C1234 (Chassis ABS Wheel Sensor)</button>
+              <button class="chip-btn" onclick="selectSampleDecode('B0001')">B0001 (Body Airbag Squib)</button>
+              <button class="chip-btn" onclick="selectSampleDecode('U0100')">U0100 (CAN Bus ECM Lost Comm)</button>
+            </div>
+          </div>
+
+          <!-- Visual Token Breakdown Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;" id="decodeTokenCards">
+            <!-- 1st Char: System -->
+            <div class="card" style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); text-align: center;">
+              <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--primary); font-weight: 700; margin-bottom: 0.25rem;">1st Character: System</div>
+              <div id="token1Char" style="font-size: 2.25rem; font-weight: 800; color: var(--primary); font-family: monospace;">P</div>
+              <div id="token1Name" style="font-size: 0.95rem; font-weight: 700; margin-top: 0.25rem;">Powertrain</div>
+              <div id="token1Desc" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Engine, transmission, and emission systems.</div>
+            </div>
+
+            <!-- 2nd Char: Code Type -->
+            <div class="card" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); text-align: center;">
+              <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: 0.25rem;">2nd Character: Code Type</div>
+              <div id="token2Char" style="font-size: 2.25rem; font-weight: 800; color: var(--accent); font-family: monospace;">0</div>
+              <div id="token2Name" style="font-size: 0.95rem; font-weight: 700; margin-top: 0.25rem;">Standard Generic</div>
+              <div id="token2Desc" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Government-mandated standard (SAE/ISO).</div>
+            </div>
+
+            <!-- 3rd Char: Subsystem -->
+            <div class="card" style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); text-align: center;">
+              <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--warning); font-weight: 700; margin-bottom: 0.25rem;">3rd Character: Subsystem</div>
+              <div id="token3Char" style="font-size: 2.25rem; font-weight: 800; color: var(--warning); font-family: monospace;">4</div>
+              <div id="token3Name" style="font-size: 0.95rem; font-weight: 700; margin-top: 0.25rem;">Auxiliary Emissions</div>
+              <div id="token3Desc" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Catalyst, EVAP, secondary air, EGR.</div>
+            </div>
+
+            <!-- 4th & 5th Chars: Fault ID -->
+            <div class="card" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3); text-align: center;">
+              <div style="font-size: 0.75rem; text-transform: uppercase; color: #c084fc; font-weight: 700; margin-bottom: 0.25rem;">4th & 5th: Fault ID</div>
+              <div id="token45Char" style="font-size: 2.25rem; font-weight: 800; color: #c084fc; font-family: monospace;">20</div>
+              <div id="token45Name" style="font-size: 0.95rem; font-weight: 700; margin-top: 0.25rem;">Specific Component</div>
+              <div id="token45Desc" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Fault index: Catalyst Bank 1 Efficiency.</div>
+            </div>
+          </div>
+
+          <!-- Enriched Diagnostic Details Banner -->
+          <div id="decodeEnrichedBox" style="background: var(--surface); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+              <span id="decodeEnrichedCode" style="font-size: 1.15rem; font-weight: 700; color: var(--text);">P0420</span>
+              <span id="decodeEnrichedSeverity" class="badge" style="background: rgba(245, 158, 11, 0.15); color: var(--warning);">Emissions Fault</span>
+            </div>
+            <p id="decodeEnrichedDesc" style="font-size: 0.9rem; color: var(--text); font-weight: 600; margin-bottom: 0.5rem;">Catalyst System Efficiency Below Threshold (Bank 1)</p>
+            <div id="decodeEnrichedDetails" style="font-size: 0.8125rem; color: var(--text-muted); line-height: 1.6;"></div>
+          </div>
+        </div>
+
+        <!-- Comprehensive Educational Reference Tables (Source: obd-codes.com) -->
+        <div class="grid-dashboard" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
+          <!-- 1st Digit: Vehicle Systems -->
+          <div class="card">
+            <h4 style="color: var(--primary); margin-bottom: 0.5rem;">1st Character: Vehicle System Categories</h4>
+            <p style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.75rem;">Identifies the high-level automotive domain of the fault:</p>
+            <table>
+              <tr><th>Letter</th><th>System</th><th>Components Monitored</th></tr>
+              <tr><td><strong style="color: var(--primary);">P</strong></td><td><strong>Powertrain</strong></td><td>Engine, Transmission, Fuel System, Emissions, Hybrid Drive</td></tr>
+              <tr><td><strong style="color: var(--accent);">C</strong></td><td><strong>Chassis</strong></td><td>ABS Brakes, Traction Control, Electronic Power Steering, Suspension</td></tr>
+              <tr><td><strong style="color: var(--warning);">B</strong></td><td><strong>Body</strong></td><td>Airbags, Seatbelts, HVAC Climate, Lighting, Power Windows, Locks</td></tr>
+              <tr><td><strong style="color: #c084fc;">U</strong></td><td><strong>Network (CAN)</strong></td><td>CAN High/Low Bus, Module-to-Module Communication, Gateways</td></tr>
+            </table>
+          </div>
+
+          <!-- 2nd Digit: Code Classification -->
+          <div class="card">
+            <h4 style="color: var(--accent); margin-bottom: 0.5rem;">2nd Character: Code Type (Standard vs. OEM)</h4>
+            <p style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.75rem;">Distinguishes federal emissions mandates from manufacturer proprietary codes:</p>
+            <table>
+              <tr><th>Digit</th><th>Classification</th><th>Application & Meaning</th></tr>
+              <tr><td><strong style="color: var(--accent);">0</strong></td><td><strong>Standardized (Generic)</strong></td><td>SAE J2012 / ISO standard code. Meaning is identical across ALL vehicle makes.</td></tr>
+              <tr><td><strong style="color: var(--warning);">1</strong></td><td><strong>Manufacturer Specific</strong></td><td>Proprietary code defined by the vehicle maker for specific hardware/features.</td></tr>
+              <tr><td><strong style="color: var(--primary);">2</strong></td><td><strong>SAE Generic / OEM</strong></td><td>Powertrain: SAE generic extension (P2xxx). Chassis/Body: OEM specific.</td></tr>
+              <tr><td><strong style="color: #c084fc;">3</strong></td><td><strong>SAE Reserved / OEM</strong></td><td>Powertrain: SAE reserved (P3000-P3399) or OEM specific (P3400-P3999).</td></tr>
+            </table>
+          </div>
+
+          <!-- 3rd Digit: Subsystem Allocation -->
+          <div class="card" style="grid-column: 1 / -1;">
+            <h4 style="color: var(--warning); margin-bottom: 0.5rem;">3rd Character: Powertrain Subsystem Allocation (P0xxx Codes)</h4>
+            <p style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.75rem;">Pinpoints the exact functional engine subsystem responsible for the DTC:</p>
+            <table>
+              <tr><th>Digit</th><th>Subsystem Focus</th><th>Typical Examples</th></tr>
+              <tr><td><strong>1</strong></td><td>Fuel and Air Metering</td><td>MAF/MAP sensors, Intake Air Temp (IAT), Fuel Pressure (P0100, P0171, P0172)</td></tr>
+              <tr><td><strong>2</strong></td><td>Fuel and Air Metering (Injector Circuit)</td><td>Fuel injector circuit faults, injector balance, cold start injectors (P0201, P0216)</td></tr>
+              <tr><td><strong>3</strong></td><td>Ignition System & Engine Misfire</td><td>Ignition coils, spark plugs, CKP/CMP sync, cylinder misfires (P0300, P0301)</td></tr>
+              <tr><td><strong>4</strong></td><td>Auxiliary Emission Controls</td><td>Catalytic converter, EVAP purge/vent, secondary air injection, EGR (P0420, P0442)</td></tr>
+              <tr><td><strong>5</strong></td><td>Vehicle Speed & Idle Control</td><td>Idle Air Control (IAC), VSS speed sensor, cruise control inputs (P0500, P0505)</td></tr>
+              <tr><td><strong>6</strong></td><td>Computer & Auxiliary Output Circuits</td><td>Internal ECM/PCM RAM/ROM, 5V sensor reference voltage circuits (P0600, P0606)</td></tr>
+              <tr><td><strong>7</strong></td><td>Transmission Controls</td><td>Shift solenoids, torque converter clutch (TCC), transmission fluid pressure (P0700, P0740)</td></tr>
+              <tr><td><strong>8</strong></td><td>Transmission Controls</td><td>Hydraulic gear ratio errors, line pressure control solenoids (P0840)</td></tr>
+            </table>
+            <div style="margin-top: 1rem; font-size: 0.8125rem; color: var(--text-muted); line-height: 1.6; background: rgba(56, 189, 248, 0.05); padding: 0.75rem; border-radius: 4px;">
+              💡 <strong>Diagnostic Best Practice:</strong> When an ECM reports both generic (e.g. <code>P0300</code>) and manufacturer-specific codes (e.g. <code>P1300</code>), always resolve the manufacturer-specific codes first. OEM codes often pinpoint the precise component failure (such as an ignition coil igniter feedback wire) that caused the generic fault.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+      <!-- SUBTAB 5: 16-Pin Connector Map (Far Right) -->
+      <div id="ref-sub-pins" class="ref-subpanel">
+        <div class="card">
+          <div class="card-title">
+            <span>SAE J1962 16-Pin OBD-II Diagnostic Connector Map</span>
+            <span style="font-size: 0.8125rem; font-weight: normal; color: var(--text-muted);">Vehicle Female Port Socket View</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.75rem;">
+            <span style="color: var(--accent); font-weight: 600;">● Green</span> indicates Standard SAE pins. 
+            <span style="color: var(--warning); font-weight: 600;">● Orange</span> indicates Manufacturer Discretionary pins. 
+            <span style="color: var(--danger); font-weight: 600;">● Red</span> indicates +12V Battery Power.
+            Click any pin on the connector or in the table below to view hardware guidance.
+          </p>
+
+          <!-- Visual SAE J1962 16-Pin Connector Diagram -->
+          <div class="connector-svg-container">
+            <svg id="obdConnectorSvg" viewBox="0 0 820 290" width="100%" height="auto" role="img" aria-label="SAE J1962 16-Pin OBD-II Diagnostic Connector Diagram">
+              <defs>
+                <linearGradient id="socketGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="#1e293b"/>
+                  <stop offset="100%" stop-color="#0f172a"/>
+                </linearGradient>
+              </defs>
+
+              <!-- Outer Beveled Port Housing (Trapezoid) -->
+              <polygon points="70,25 750,25 780,55 745,245 725,265 95,265 75,245 40,55" fill="url(#socketGrad)" stroke="#334155" stroke-width="4" stroke-linejoin="round"/>
+              
+              <!-- Inner Cavity Bevel -->
+              <polygon points="85,40 735,40 760,65 730,235 715,250 105,250 90,235 60,65" fill="#090e17" stroke="#1e293b" stroke-width="2" stroke-linejoin="round"/>
+
+              <!-- Mounting Ear Screws -->
+              <circle cx="55" cy="145" r="7" fill="#1e293b" stroke="#475569" stroke-width="2"/>
+              <circle cx="765" cy="145" r="7" fill="#1e293b" stroke="#475569" stroke-width="2"/>
+
+              <!-- Keying Center Alignment Divider -->
+              <rect x="110" y="132" width="600" height="16" rx="4" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
+              <!-- Center Keying Notch -->
+              <rect x="380" y="127" width="60" height="26" rx="3" fill="#090e17" stroke="#475569" stroke-width="2"/>
+
+              <!-- Port Labels -->
+              <text x="410" y="20" fill="#64748b" font-size="11" font-weight="700" text-anchor="middle" letter-spacing="2">TOP ROW: PINS 1-8 (SAE J1962 FEMALE VEHICLE PORT)</text>
+              <text x="410" y="282" fill="#64748b" font-size="11" font-weight="700" text-anchor="middle" letter-spacing="2">BOTTOM ROW: PINS 9-16 (CHASSIS ORIENTATION)</text>
+
+              <!-- Pin Sockets Group rendered dynamically -->
+              <g id="svgPinsGroup"></g>
+            </svg>
+          </div>
+
+          <!-- Selected Pin Inspection Detail Card -->
+          <div id="pinDetail" class="pin-detail-card">
+            <div class="pin-detail-header">
+              <div id="pinDetailBadge" class="pin-badge">Pin 6</div>
+              <h4 id="pinDetailTitle" style="color: var(--primary); font-size: 1.1rem;">Pin 6: CAN High (HS-CAN)</h4>
+            </div>
+            <p id="pinDetailDesc" class="pin-detail-text">ISO 15765-4 High-Speed CAN High line (500 kbps, 2.5V-3.5V differential).</p>
+            <div id="pinDetailNotes" class="pin-detail-notes">Primary Powertrain & Emissions bus used by standard ELM327 and J2534.</div>
+          </div>
+
+          <!-- Quick 16-Pin Reference Grid -->
+          <div class="pinout-grid" id="pinoutGrid"></div>
+        </div>
+      </div>
+
+
+    <!-- TAB 6: Settings & Presets -->
+    <section id="tab-settings" class="tab-content" role="tabpanel">
+      <div class="card" style="max-width: 680px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+          <h3 style="margin: 0;">Vehicle Configuration Presets</h3>
+          <span id="presetDirtyBadge" style="display:none; color: var(--warning); font-size: 0.75rem; font-weight: 600;">* Unsaved modifications</span>
+        </div>
+
+        <!-- Presets Selection & Naming -->
+        <div class="card" style="background: var(--surface); margin-bottom: 1.25rem;">
+          <div class="form-group">
+            <label for="cfgPresetName">Active Preset Identifier / Name:</label>
+            <input type="text" id="cfgPresetName" value="default" oninput="markPresetDirty()">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="presetListSelect">Load Preset from Local App Presets:</label>
+            <div style="display: flex; gap: 0.5rem;">
+              <select id="presetListSelect" style="flex: 1;" onchange="loadPresetFromList(this.value)">
+                <option value="default">default</option>
+              </select>
+              <button class="btn btn-outline" onclick="refreshPresetsList()">Refresh List</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Settings fields -->
+        <div class="form-group">
+          <label for="cfgAdapter">Diagnostic Interface Adapter:</label>
+          <select id="cfgAdapter" onchange="markPresetDirty()">
+            <option value="elm327">ELM327 Wi-Fi Dongle (TCP Socket)</option>
+            <option value="j2534">J2534 Pass-Thru USB Cable</option>
+            <option value="socketcan" id="optAdapterSocketCan">SocketCAN (Linux can0 / vcan0)</option>
+            <option value="mock">In-Memory Mock Adapter (Test)</option>
+          </select>
+        </div>
+        <div class="form-group" id="cfgSocketCanGroup">
+          <label for="cfgSocketCanChannel">SocketCAN Interface Channel:</label>
+          <input type="text" id="cfgSocketCanChannel" value="can0" placeholder="can0, vcan0, slcan0" oninput="markPresetDirty()">
+          <span id="socketCanHwNotice" style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 0.25rem;">Checking hardware...</span>
+        </div>
+        <div class="form-group">
+          <label for="cfgHost">ELM327 Wi-Fi Host IP:</label>
+          <input type="text" id="cfgHost" value="192.168.0.10" oninput="markPresetDirty()">
+        </div>
+        <div class="form-group">
+          <label for="cfgPort">ELM327 Wi-Fi Port:</label>
+          <input type="number" id="cfgPort" value="35000" oninput="markPresetDirty()">
+        </div>
+        <div class="form-group">
+          <label for="cfgDomain">Vehicle Domain:</label>
+          <select id="cfgDomain" onchange="markPresetDirty()">
+            <option value="car">Passenger Car (CAN 500k)</option>
+            <option value="truck">Truck (J1939 / CAN)</option>
+            <option value="motorcycle">Motorcycle (Euro 5 ISO 19689)</option>
+            <option value="boat">Marine Craft (J1939-05)</option>
+            <option value="atv">ATV / UTV Powersports</option>
+          </select>
+        </div>
+
+        <!-- Action buttons row with system file dialog triggers -->
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1.25rem;">
+          <button class="btn btn-primary" onclick="saveActivePreset()">Save Preset to App</button>
+          
+          <!-- Native OS file open dialog button -->
+          <button class="btn btn-outline" onclick="openPresetFileDialog()">Load Preset from Disk...</button>
+          <input type="file" id="presetFileInput" accept=".yaml,.yml" style="display: none;" onchange="handlePresetFileImport(event)">
+
+          <!-- Native OS file save dialog button -->
+          <button class="btn btn-outline" onclick="exportPresetFileDialog()">Save Preset to Disk (Export)...</button>
+        </div>
+        <div id="presetFeedbackMsg" style="font-size: 0.8125rem; color: var(--accent); margin-top: 0.75rem; display: none;"></div>
+      </div>
+    </section>
+    <!-- MODAL 1: Mode 01 Sensor Palette & Parameter Browser -->
+    <div id="modal-sensor-palette" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="paletteModalTitle">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 id="paletteModalTitle" style="font-size: 1.1rem; color: var(--primary); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+            <span>🔍 Mode 01 Standardized Diagnostic Sensor Palette</span>
+          </h3>
+          <button class="btn btn-outline" style="padding: 0.25rem 0.6rem; border: none; font-size: 1.25rem;" onclick="closeSensorPalette()" aria-label="Close sensor palette modal">✕</button>
+        </div>
+        <div class="modal-body">
+          <div style="margin-bottom: 1rem;">
+            <label for="paletteSearchInput" style="font-size: 0.8125rem;">Search Mode 01 Parameters by Name, PID Hex, or Units:</label>
+            <input type="text" id="paletteSearchInput" placeholder="Filter sensors (e.g. Coolant, RPM, MAF, Fuel, Voltage, Throttle, 05)..." oninput="filterPaletteSensors()">
+          </div>
+          <div class="palette-filter-bar">
+            <button class="chip-btn active" id="chip-cat-all" onclick="setPaletteCategory('')">All Sensors</button>
+            <button class="chip-btn" id="chip-cat-supported" onclick="setPaletteCategory('supported')">⭐ Supported Only</button>
+            <button class="chip-btn" id="chip-cat-engine" onclick="setPaletteCategory('Engine')">Engine Dynamics</button>
+            <button class="chip-btn" id="chip-cat-fuel" onclick="setPaletteCategory('Fuel/Air')">Fuel & Air Metering</button>
+            <button class="chip-btn" id="chip-cat-temp" onclick="setPaletteCategory('Temperatures')">Temperatures</button>
+            <button class="chip-btn" id="chip-cat-speed" onclick="setPaletteCategory('Speed/Timing')">Speed & Timing</button>
+            <button class="chip-btn" id="chip-cat-o2" onclick="setPaletteCategory('Oxygen Sensors')">Oxygen Sensors</button>
+            <button class="chip-btn" id="chip-cat-elec" onclick="setPaletteCategory('Electrical')">Electrical</button>
+          </div>
+          <div id="paletteCountNotice" style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+            Loading sensor catalog...
+          </div>
+          <div style="overflow-x: auto;">
+            <table style="margin-top: 0;">
+              <thead>
+                <tr>
+                  <th>PID</th>
+                  <th>Parameter Description</th>
+                  <th>Category</th>
+                  <th>Units / Scale</th>
+                  <th>Vehicle Status</th>
+                  <th style="text-align: right;">Dashboard / Scope Actions</th>
+                </tr>
+              </thead>
+              <tbody id="paletteTableBody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="closeSensorPalette()">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 2: Mode 04 Clear DTCs Accessible Confirmation Modal -->
+    <div id="modal-clear-dtc-confirm" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="clearDtcModalTitle">
+      <div class="modal-card" style="max-width: 520px;">
+        <div class="modal-header">
+          <h3 id="clearDtcModalTitle" style="font-size: 1.1rem; color: var(--danger); display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+            <span>⚠️ Confirm Mode 04 DTC Clear</span>
+          </h3>
+          <button class="btn btn-outline" style="padding: 0.25rem 0.6rem; border: none; font-size: 1.25rem;" onclick="closeClearDtcModal()" aria-label="Close clear DTC modal">✕</button>
+        </div>
+        <div class="modal-body">
+          <div style="padding: 0.75rem 1rem; border-radius: 6px; background: rgba(239, 68, 68, 0.12); border-left: 4px solid var(--danger); margin-bottom: 1rem;">
+            <strong style="color: var(--danger);">Critical Diagnostic Directive:</strong>
+            <p style="font-size: 0.8125rem; margin-top: 0.25rem;">
+              Executing OBD-II Mode 04 will instruct all connected vehicle Electronic Control Units to:
+            </p>
+            <ul style="font-size: 0.8125rem; padding-left: 1.25rem; margin-top: 0.25rem; line-height: 1.6;">
+              <li>Turn OFF the Check Engine Malfunction Indicator Lamp (MIL).</li>
+              <li>Erase all confirmed (Mode 03) and pending (Mode 07) trouble codes.</li>
+              <li>Purge all Mode 02 Freeze Frame telemetry snapshots.</li>
+              <li><strong>Reset all 11 I/M readiness drive-cycle monitor flags to "Not Ready"</strong> (the vehicle will not pass emissions test until a full drive cycle is completed).</li>
+            </ul>
+          </div>
+          <p style="font-size: 0.875rem; color: var(--text);">
+            Are you sure you want to broadcast the Mode 04 clear command to the active diagnostic bus?
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="closeClearDtcModal()">Cancel</button>
+          <button class="btn btn-danger" onclick="executeClearDtcs()">Confirm & Clear DTCs (Mode 04)</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer>
+    <p>jgOBDII-Reader &mdash; 100% Local Data Residency &mdash; <a href="https://github.com/joelontheroad/jgobdii-reader" target="_blank" rel="noopener noreferrer">Source Code (GNU AGPLv3)</a></p>
+  </footer>
+
+  <script>
+    // Launch token management for dual authentication (cookie + header)
+    function getLaunchToken() {
+      const urlToken = new URLSearchParams(window.location.search).get('token');
+      if (urlToken) {
+        sessionStorage.setItem('jgobdii_token', urlToken);
+        return urlToken;
+      }
+      return sessionStorage.getItem('jgobdii_token') || '';
+    }
+
+    async function authFetch(url, options = {}) {
+      const token = getLaunchToken();
+      const headers = Object.assign({}, options.headers || {});
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      return fetch(url, { credentials: 'same-origin', ...options, headers });
+    }
+
+    // Default 16-Pin Reference Data for immediate, zero-latency visual rendering
+    const defaultPinMetadata = [
+      { pin: 1, name: "Vendor / SWCAN", is_standard: false, description: "Single-Wire CAN (GM GMLAN 33.3 kbps) or vendor diagnostic link.", manufacturer_note: "GM: GMLAN 33.3 kbps for Body/HVAC/Radio. Requires J2534 or SWCAN transceiver." },
+      { pin: 2, name: "J1850 Bus (+)", is_standard: true, description: "SAE J1850 PWM (+) or VPW (GM Class 2 10.4 kbps) variable pulse width line.", manufacturer_note: "Ford pre-2004 (PWM) and GM pre-2006 (VPW) legacy powertrain bus." },
+      { pin: 3, name: "Vendor / MS-CAN-H", is_standard: false, description: "Medium-Speed CAN High (Ford MS-CAN 125 kbps).", manufacturer_note: "Ford: MS-CAN High for Instrument Cluster, HVAC, Body. Requires J2534 or ELM327 toggle switch." },
+      { pin: 4, name: "Chassis Ground", is_standard: true, description: "Chassis metal reference ground connected to vehicle negative battery terminal.", manufacturer_note: "Main vehicle metal frame ground." },
+      { pin: 5, name: "Signal Ground", is_standard: true, description: "Clean isolated electronic logic ground for ECM sensor references.", manufacturer_note: "Clean ground reference to eliminate sensor ground loops." },
+      { pin: 6, name: "CAN High (HS-CAN)", is_standard: true, description: "ISO 15765-4 High-Speed CAN High line (500 kbps, 2.5V-3.5V differential).", manufacturer_note: "Primary Powertrain & Emissions bus used by standard ELM327 and J2534." },
+      { pin: 7, name: "K-Line", is_standard: true, description: "ISO 9141-2 / ISO 14230-4 K-Line single-wire bidirectional serial interface.", manufacturer_note: "Used on Toyota (2000-2004) and Honda pre-2006 for slow 5-baud init." },
+      { pin: 8, name: "Vendor Discretionary", is_standard: false, description: "Ignition sense, secondary K-Line, or vendor accessory line.", manufacturer_note: "Unpopulated on most standard vehicles." },
+      { pin: 9, name: "Vendor Discretionary", is_standard: false, description: "Engine tachometer pulse output or diagnostic service check line.", manufacturer_note: "Honda: SCS (Service Check Signal); grounding triggers manual flash codes." },
+      { pin: 10, name: "J1850 Bus (-)", is_standard: true, description: "SAE J1850 PWM (-) complementary low differential line.", manufacturer_note: "Ford pre-2004 PWM low line paired with Pin 2." },
+      { pin: 11, name: "Vendor / MS-CAN-L", is_standard: false, description: "Medium-Speed CAN Low (Ford MS-CAN 125 kbps).", manufacturer_note: "Ford: MS-CAN Low (125 kbps). Paired with Pin 3. Requires J2534 or switched ELM327." },
+      { pin: 12, name: "Vendor Discretionary", is_standard: false, description: "Manufacturer programming or chassis module serial link.", manufacturer_note: "Unpopulated or manufacturer programming flash line." },
+      { pin: 13, name: "Vendor / FEPS", is_standard: false, description: "Flash programming voltage (Ford FEPS 18V) or TC terminal.", manufacturer_note: "Ford: FEPS (18V) programming voltage line for PCM reflashing via J2534. Toyota: TC terminal." },
+      { pin: 14, name: "CAN Low (HS-CAN)", is_standard: true, description: "ISO 15765-4 High-Speed CAN Low line (500 kbps, 2.5V-1.5V differential).", manufacturer_note: "Primary Powertrain & Emissions bus paired with Pin 6." },
+      { pin: 15, name: "L-Line", is_standard: true, description: "ISO 9141-2 / ISO 14230-4 optional slow init low line.", manufacturer_note: "Legacy slow-baud initialization line." },
+      { pin: 16, name: "Battery Power (+12V)", is_standard: true, description: "Permanent unswitched +12V battery power from vehicle fuse block.", manufacturer_note: "Powers OBD-II scan tool and ELM327 Wi-Fi adapter (Max 4A)." },
+    ];
+
+    let allPins = [...defaultPinMetadata];
+    let selectedPinNum = 6;
+
+    // Tab switching
+    function openTab(tabId, evt) {
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+      });
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      const targetBtn = evt ? evt.currentTarget : document.querySelector(`[onclick*="${tabId}"]`);
+      if (targetBtn) {
+        targetBtn.classList.add('active');
+        targetBtn.setAttribute('aria-selected', 'true');
+      }
+      const targetContent = document.getElementById(tabId);
+      if (targetContent) targetContent.classList.add('active');
+
+      if (tabId === 'tab-mfg') loadManufacturerData();
+      if (tabId === 'tab-can') pollCanFrames();
+      if (tabId === 'tab-dtc') loadDtcs();
+      if (tabId === 'tab-ref') openRefSubtab('ref-sub-sae');
+      if (tabId === 'tab-settings') refreshPresetsList();
+    }
+
+    // Reference sub-navigation switching
+    function openRefSubtab(subId) {
+      document.querySelectorAll('.subnav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.ref-subpanel').forEach(p => p.classList.remove('active'));
+      
+      const btn = document.getElementById(`btn-${subId.replace('ref-sub-', 'ref-')}`);
+      if (btn) btn.classList.add('active');
+      const panel = document.getElementById(subId);
+      if (panel) panel.classList.add('active');
+
+      if (subId === 'ref-sub-pins') {
+        renderSvgPins(allPins);
+        renderGridPins(allPins);
+        selectPin(selectedPinNum);
+      } else if (subId === 'ref-sub-sae') {
+        loadSaeReferenceDtcs();
+      } else if (subId === 'ref-sub-mfg') {
+        switchMfgReference(currentMfgKey || 'toyota');
+      } else if (subId === 'ref-sub-decode') {
+        runInteractiveDecoder(document.getElementById('decodeInputCode') ? document.getElementById('decodeInputCode').value : 'P0420');
+      }
+    }
+
+
+    // Mode 01 Sensor Catalog & Vehicle Support Discovery
+    let allPidCatalog = [];
+    let supportedPidsSet = new Set();
+    let currentPaletteCategory = '';
+    let lastTelemetryData = null;
+
+    async function loadSensorCatalogAndSupport() {
+      try {
+        const [catRes, suppRes] = await Promise.all([
+          authFetch('/api/pids/catalog'),
+          authFetch('/api/pids/supported')
+        ]);
+        if (catRes.ok) {
+          const catData = await catRes.json();
+          allPidCatalog = catData.catalog || [];
+        }
+        if (suppRes.ok) {
+          const suppData = await suppRes.json();
+          supportedPidsSet = new Set(suppData.supported_pids || []);
+        }
+
+        // Dynamically populate SCOPE_CHANNELS from catalog
+        allPidCatalog.forEach(p => {
+          const key = p.pid.toLowerCase();
+          if (!SCOPE_CHANNELS[key]) {
+            SCOPE_CHANNELS[key] = {
+              name: p.name,
+              unit: p.unit,
+              min: p.min,
+              max: p.max,
+              scale: p.max - p.min,
+              pid: p.pid
+            };
+          }
+        });
+
+        // Re-init scopes with expanded channels
+        initScopes();
+        renderPaletteTable();
+      } catch (e) {}
+    }
+
+    function openSensorPalette() {
+      const modal = document.getElementById('modal-sensor-palette');
+      if (modal) modal.classList.add('active');
+      renderPaletteTable();
+      const input = document.getElementById('paletteSearchInput');
+      if (input) input.focus();
+    }
+
+    function closeSensorPalette() {
+      const modal = document.getElementById('modal-sensor-palette');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function setPaletteCategory(cat) {
+      currentPaletteCategory = cat;
+      document.querySelectorAll('#modal-sensor-palette .chip-btn').forEach(b => b.classList.remove('active'));
+      if (cat === '') document.getElementById('chip-cat-all').classList.add('active');
+      else if (cat === 'supported') document.getElementById('chip-cat-supported').classList.add('active');
+      else if (cat === 'Engine') document.getElementById('chip-cat-engine').classList.add('active');
+      else if (cat === 'Fuel/Air') document.getElementById('chip-cat-fuel').classList.add('active');
+      else if (cat === 'Temperatures') document.getElementById('chip-cat-temp').classList.add('active');
+      else if (cat === 'Speed/Timing') document.getElementById('chip-cat-speed').classList.add('active');
+      else if (cat === 'Oxygen Sensors') document.getElementById('chip-cat-o2').classList.add('active');
+      else if (cat === 'Electrical') document.getElementById('chip-cat-elec').classList.add('active');
+      renderPaletteTable();
+    }
+
+    function filterPaletteSensors() {
+      renderPaletteTable();
+    }
+
+    function renderPaletteTable() {
+      const tbody = document.getElementById('paletteTableBody');
+      const notice = document.getElementById('paletteCountNotice');
+      if (!tbody) return;
+      const search = (document.getElementById('paletteSearchInput') ? document.getElementById('paletteSearchInput').value : '').toLowerCase().trim();
+
+      let filtered = allPidCatalog.filter(p => {
+        if (currentPaletteCategory === 'supported' && !supportedPidsSet.has(p.pid)) return false;
+        if (currentPaletteCategory && currentPaletteCategory !== 'supported' && p.category !== currentPaletteCategory) return false;
+        if (search) {
+          const matchPid = p.pid.toLowerCase().includes(search);
+          const matchName = p.name.toLowerCase().includes(search);
+          const matchDesc = p.description.toLowerCase().includes(search);
+          const matchUnit = p.unit.toLowerCase().includes(search);
+          if (!matchPid && !matchName && !matchDesc && !matchUnit) return false;
+        }
+        return true;
+      });
+
+      if (notice) {
+        notice.innerText = `Showing ${filtered.length} of ${allPidCatalog.length} Mode 01 diagnostic parameters (${supportedPidsSet.size} supported by vehicle bitmasks).`;
+      }
+
+      tbody.innerHTML = '';
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No sensor parameters match the search filter.</td></tr>';
+        return;
+      }
+
+      filtered.forEach(p => {
+        const isSupported = supportedPidsSet.has(p.pid);
+        const suppBadge = isSupported
+          ? '<span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: var(--accent); border-color: rgba(16, 185, 129, 0.3);">🟢 Supported</span>'
+          : '<span class="status-badge" style="background: rgba(148, 163, 184, 0.1); color: var(--text-muted); border-color: rgba(148, 163, 184, 0.2);">⚪ Unsupported</span>';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><code style="font-size: 0.9rem; font-weight: 700; color: var(--primary);">0x${p.pid}</code></td>
+          <td><strong>${p.name}</strong><br><span style="font-size: 0.75rem; color: var(--text-muted);">${p.description}</span></td>
+          <td><span style="font-size: 0.75rem; color: var(--text-muted);">${p.category}</span></td>
+          <td><code>${p.unit || 'State'}</code> <span style="font-size: 0.75rem; color: var(--text-muted);">[${p.min}..${p.max}]</span></td>
+          <td>${suppBadge}</td>
+          <td style="text-align: right;">
+            <div style="display: inline-flex; gap: 0.35rem; align-items: center;">
+              <button class="btn btn-outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="addGaugeToDashboard('${p.pid}', '${p.name.replace(/'/g, "\\'")}', '${p.unit}')" title="Display or toggle this metric on the live gauge board">+ Gauge</button>
+              <select style="padding: 0.2rem 0.4rem; font-size: 0.75rem; width: 110px;" onchange="assignScopeChannel(parseInt(this.value, 10), '${p.pid.toLowerCase()}'); this.value='';">
+                <option value="">Scope ▾</option>
+                <option value="0">Scope 1</option>
+                <option value="1">Scope 2</option>
+                <option value="2">Scope 3</option>
+                <option value="3">Scope 4</option>
+                <option value="4">Scope 5</option>
+              </select>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function addGaugeToDashboard(pidHex, name, unit) {
+      const cardId = `card-dyn-${pidHex}`;
+      let card = document.getElementById(cardId);
+      if (card) {
+        card.style.display = card.style.display === 'none' ? 'block' : 'none';
+        return;
+      }
+      const board = document.getElementById('gaugesDashboard');
+      if (!board) return;
+      card = document.createElement('div');
+      card.className = 'card';
+      card.id = cardId;
+      card.innerHTML = `
+        <div class="card-title">${name} [0x${pidHex}] <button class="btn btn-outline" style="padding: 0 4px; font-size: 0.7rem; border: none;" onclick="hideGauge('${cardId}')" title="Hide gauge">✕</button></div>
+        <div class="metric-value" id="valDyn-${pidHex}">--<span class="metric-unit">${unit}</span></div>
+      `;
+      board.appendChild(card);
+    }
+
+    function assignScopeChannel(scopeIdx, chKey) {
+      if (isNaN(scopeIdx) || scopeIdx < 0 || scopeIdx >= 5) return;
+      changeScopeChannel(scopeIdx, chKey);
+      initScopes();
+      closeSensorPalette();
+    }
+
+    // Multi-Channel Oscilloscopes Configuration
+    const SCOPE_CHANNELS = {
+      'o2': { name: 'Oxygen Sensor 1', unit: 'V', min: 0.0, max: 1.0, scale: 1.0 },
+      'rpm': { name: 'Engine Speed', unit: 'RPM', min: 0, max: 6000, scale: 6000 },
+      'speed': { name: 'Vehicle Speed', unit: 'km/h', min: 0, max: 160, scale: 160 },
+      'vss_hz': { name: 'Derived VSS Frequency', unit: 'Hz', min: 0, max: 120, scale: 120 },
+      'throttle': { name: 'Throttle Position', unit: '%', min: 0, max: 100, scale: 100 },
+      'maf': { name: 'Mass Air Flow', unit: 'g/s', min: 0, max: 50, scale: 50 },
+      'coolant': { name: 'Coolant Temp', unit: '°C', min: 0, max: 120, scale: 120 },
+      'stft': { name: 'Short Term Fuel Trim', unit: '%', min: -25, max: 25, scale: 50 },
+      'load': { name: 'Calculated Engine Load', unit: '%', min: 0, max: 100, scale: 100 },
+      'iat': { name: 'Intake Air Temp', unit: '°C', min: 0, max: 80, scale: 80 }
+    };
+
+    const SCOPE_COLORS = [
+      '#00ff66', // Channel 1: Emerald Green
+      '#38bdf8', // Channel 2: Sky Cyan
+      '#f59e0b', // Channel 3: Amber Gold
+      '#a855f7', // Channel 4: Electric Violet
+      '#ec4899'  // Channel 5: Hot Neon Coral
+    ];
+
+    let activeScopeCount = 1;
+    let scopeChannels = ['o2', 'rpm', 'speed', 'throttle', 'stft'];
+    let scopeBuffers = [
+      new Array(160).fill(0.45),
+      new Array(160).fill(800),
+      new Array(160).fill(0),
+      new Array(160).fill(15),
+      new Array(160).fill(0)
+    ];
+    let o2SimPhase = 0;
+
+    function initScopes() {
+      const container = document.getElementById('scopesGrid');
+      if (!container) return;
+      container.innerHTML = '';
+      if (activeScopeCount > 1) {
+        container.classList.add('multi');
+      } else {
+        container.classList.remove('multi');
+      }
+
+      for (let i = 0; i < activeScopeCount; i++) {
+        const chKey = scopeChannels[i] || 'o2';
+        const color = SCOPE_COLORS[i % SCOPE_COLORS.length];
+        const card = document.createElement('div');
+        card.className = 'scope-card';
+        card.innerHTML = `
+          <div class="scope-header">
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <span class="status-badge" style="background: rgba(255,255,255,0.06); color: ${color}; border: 1px solid ${color};">Scope ${i + 1}</span>
+              <select style="padding: 0.2rem 0.5rem; font-size: 0.8125rem; font-weight: 600;" onchange="changeScopeChannel(${i}, this.value)">
+                ${Object.keys(SCOPE_CHANNELS).map(k => `<option value="${k}" ${k === chKey ? 'selected' : ''}>${SCOPE_CHANNELS[k].name} (${SCOPE_CHANNELS[k].unit})</option>`).join('')}
+              </select>
+            </div>
+            <div style="font-size: 1rem; font-weight: 700; color: ${color};" id="scopeVal-${i}">--</div>
+          </div>
+          <canvas id="scopeCanvas-${i}" width="540" height="200" style="width: 100%; height: 200px; display: block; background: #050b14; border-radius: 6px;"></canvas>
+        `;
+        container.appendChild(card);
+      }
+    }
+
+    function setScopeCount(count) {
+      activeScopeCount = Math.max(1, Math.min(5, count));
+      initScopes();
+    }
+
+    function changeScopeChannel(scopeIdx, newChannel) {
+      if (scopeIdx >= 0 && scopeIdx < 5) {
+        scopeChannels[scopeIdx] = newChannel;
+        const cfg = SCOPE_CHANNELS[newChannel];
+        const initialVal = cfg ? (cfg.min + (cfg.max - cfg.min) / 2) : 0;
+        scopeBuffers[scopeIdx] = new Array(160).fill(initialVal);
+      }
+    }
+
+    function renderAllScopes() {
+      for (let i = 0; i < activeScopeCount; i++) {
+        const canvas = document.getElementById(`scopeCanvas-${i}`);
+        if (!canvas) continue;
+        const ctx = canvas.getContext('2d');
+        const buf = scopeBuffers[i];
+        const chKey = scopeChannels[i] || 'o2';
+        const cfg = SCOPE_CHANNELS[chKey] || SCOPE_CHANNELS['o2'];
+        const color = SCOPE_COLORS[i % SCOPE_COLORS.length];
+
+        ctx.fillStyle = '#050b14';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Grid lines
+        ctx.strokeStyle = '#132337';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < canvas.width; x += 45) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+        }
+        for (let y = 0; y < canvas.height; y += 35) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+        }
+
+        // Zero baseline if range spans negative to positive
+        if (cfg.min < 0 && cfg.max > 0) {
+          const zeroY = canvas.height - (((0 - cfg.min) / (cfg.max - cfg.min)) * (canvas.height - 30) + 15);
+          ctx.strokeStyle = '#334155';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath(); ctx.moveTo(0, zeroY); ctx.lineTo(canvas.width, zeroY); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+
+        // Waveform trace
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        for (let pt = 0; pt < buf.length; pt++) {
+          const x = (pt / (buf.length - 1)) * canvas.width;
+          const normalized = Math.max(0, Math.min(1, (buf[pt] - cfg.min) / (cfg.max - cfg.min)));
+          const y = canvas.height - (normalized * (canvas.height - 30) + 15);
+          if (pt === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      requestAnimationFrame(renderAllScopes);
+    }
+    requestAnimationFrame(renderAllScopes);
+
+    // Gauge Customization & Visibility
+    function toggleGaugeVisibility(cardId) {
+      if (!cardId) return;
+      const card = document.getElementById(cardId);
+      if (card) {
+        card.style.display = (card.style.display === 'none') ? 'block' : 'none';
+      }
+      document.getElementById('gaugeSelect').value = '';
+    }
+
+    function hideGauge(cardId) {
+      const card = document.getElementById(cardId);
+      if (card) card.style.display = 'none';
+    }
+
+    function resetAllGauges(showAll) {
+      const allCards = [
+        'card-rpm', 'card-speed', 'card-vss-hz', 'card-coolant',
+        'card-throttle', 'card-maf', 'card-load', 'card-iat',
+        'card-stft', 'card-o2'
+      ];
+      const primaryFour = ['card-rpm', 'card-speed', 'card-vss-hz', 'card-coolant'];
+      allCards.forEach(cId => {
+        const card = document.getElementById(cId);
+        if (card) {
+          card.style.display = (showAll || primaryFour.includes(cId)) ? 'block' : 'none';
+        }
+      });
+    }
+
+    // Telemetry Polling Loop
+    async function pollTelemetry() {
+      try {
+        const res = await authFetch('/api/telemetry');
+        if (res.ok) {
+          const d = await res.json();
+          lastTelemetryData = d;
+          const rpm = d['0C'] || 800;
+          const speed = d['0D'] || 0;
+          const vssHz = d['vss_hz'] || 0.0;
+          const coolant = d['05'] || 85;
+          const throttle = d['11'] || 15;
+          const maf = d['10'] || 3.5;
+          const load = d['04'] || 25;
+          const iat = d['0F'] || 28;
+          const stft = d['06'] !== undefined ? d['06'] : 0.0;
+          
+          o2SimPhase += 0.15;
+          const o2v = d['14'] !== undefined ? d['14'] : (0.45 + 0.4 * Math.sin(o2SimPhase));
+
+          // Update DOM gauge readouts
+          document.getElementById('valRpm').innerHTML = rpm + '<span class="metric-unit">RPM</span>';
+          document.getElementById('valSpeed').innerHTML = speed + '<span class="metric-unit">km/h</span>';
+          document.getElementById('valVssHz').innerHTML = vssHz + '<span class="metric-unit">Hz</span>';
+          document.getElementById('valCoolant').innerHTML = coolant + '<span class="metric-unit">°C</span>';
+          document.getElementById('valThrottle').innerHTML = throttle + '<span class="metric-unit">%</span>';
+          document.getElementById('valMaf').innerHTML = maf + '<span class="metric-unit">g/s</span>';
+          document.getElementById('valLoad').innerHTML = load + '<span class="metric-unit">%</span>';
+          document.getElementById('valIat').innerHTML = iat + '<span class="metric-unit">°C</span>';
+          document.getElementById('valStft').innerHTML = (stft > 0 ? '+' : '') + stft + '<span class="metric-unit">%</span>';
+          document.getElementById('valO2').innerHTML = o2v.toFixed(3) + '<span class="metric-unit">V</span>';
+
+          const liveDataMap = {
+            'o2': o2v,
+            'rpm': rpm,
+            'speed': speed,
+            'vss_hz': vssHz,
+            'coolant': coolant,
+            'throttle': throttle,
+            'maf': maf,
+            'load': load,
+            'iat': iat,
+            'stft': stft
+          };
+
+          // Also map any hex PIDs directly
+          for (const [k, v] of Object.entries(d)) {
+            liveDataMap[k.toLowerCase()] = v;
+            // Update dynamic gauge card if present
+            const dynEl = document.getElementById(`valDyn-${k}`);
+            if (dynEl) {
+              const u = SCOPE_CHANNELS[k.toLowerCase()] ? SCOPE_CHANNELS[k.toLowerCase()].unit : '';
+              dynEl.innerHTML = (typeof v === 'number' ? (v % 1 !== 0 ? v.toFixed(2) : v) : v) + `<span class="metric-unit">${u}</span>`;
+            }
+          }
+
+          // Update active scopes and labels
+          for (let i = 0; i < activeScopeCount; i++) {
+            const ch = scopeChannels[i] || 'o2';
+            const val = liveDataMap[ch] !== undefined ? liveDataMap[ch] : 0;
+            scopeBuffers[i].shift();
+            scopeBuffers[i].push(val);
+
+            const valEl = document.getElementById(`scopeVal-${i}`);
+            if (valEl) {
+              const u = SCOPE_CHANNELS[ch] ? SCOPE_CHANNELS[ch].unit : '';
+              valEl.innerText = `${typeof val === 'number' ? (val % 1 !== 0 ? val.toFixed(2) : val) : val} ${u}`;
+            }
+          }
+        }
+      } catch (e) {}
+      setTimeout(pollTelemetry, 250);
+    }
+
+    // Manufacturer Enhanced Data
+    async function loadManufacturerData() {
+      const mfg = document.getElementById('mfgSelect').value;
+      const container = document.getElementById('mfgContainer');
+      try {
+        const res = await authFetch(`/api/enhanced?mfg=${mfg}`);
+        if (res.ok) {
+          const data = await res.json();
+          container.innerHTML = '';
+          data.parameters.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+              <div class="card-title">${p.name} [${p.header}]</div>
+              <div class="metric-value">${p.value !== null ? p.value : 'N/A'}<span class="metric-unit">${p.unit}</span></div>
+              <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">${p.description}</p>
+            `;
+            container.appendChild(card);
+          });
+        }
+      } catch (e) {}
+    }
+
+    // CAN Frames Capture
+    async function pollCanFrames() {
+      const filter = document.getElementById('canFilterInput').value;
+      const count = document.getElementById('canCountInput').value;
+      const tbody = document.getElementById('canTableBody');
+      try {
+        const url = `/api/can_frames?count=${count}` + (filter ? `&filter_id=${filter}` : '');
+        const res = await authFetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          tbody.innerHTML = '';
+          if (data.frames && data.frames.length > 0) {
+            data.frames.forEach(f => {
+              const tr = document.createElement('tr');
+              tr.innerHTML = `
+                <td><strong>${f.can_id}</strong></td>
+                <td>${f.is_extended ? 'YES (29-bit)' : 'NO (11-bit)'}</td>
+                <td>${f.dlc}</td>
+                <td><code>${f.data_hex}</code></td>
+                <td>${new Date(f.timestamp * 1000).toLocaleTimeString()}</td>
+              `;
+              tbody.appendChild(tr);
+            });
+          } else {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No matching CAN frames captured.</td></tr>';
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 16-Pin Connector Rendering & Interactivity
+    function renderSvgPins(pins) {
+      const svgGroup = document.getElementById('svgPinsGroup');
+      if (!svgGroup) return;
+      svgGroup.innerHTML = '';
+
+      pins.forEach(p => {
+        const isTop = p.pin <= 8;
+        const col = isTop ? (p.pin - 1) : (p.pin - 9);
+        const x = isTop ? (132 + col * 72) : (142 + col * 69);
+        const y = isTop ? 68 : 166;
+        const width = isTop ? 54 : 50;
+        const height = 48;
+
+        let strokeColor = p.is_standard ? '#10b981' : '#f59e0b';
+        if (p.pin === 16) strokeColor = '#ef4444';
+        if (p.pin === 4 || p.pin === 5) strokeColor = '#38bdf8';
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', `pin-terminal ${p.pin === selectedPinNum ? 'active' : ''}`);
+        g.setAttribute('id', `svg-pin-${p.pin}`);
+        g.setAttribute('tabindex', '0');
+        g.setAttribute('role', 'button');
+        g.setAttribute('aria-label', `Pin ${p.pin}: ${p.name}`);
+        g.onclick = () => selectPin(p.pin);
+        g.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') selectPin(p.pin); };
+
+        g.innerHTML = `
+          <title>Pin ${p.pin}: ${p.name}</title>
+          <rect class="pin-slot-bg" x="${x}" y="${y}" width="${width}" height="${height}" rx="6" fill="#111827" stroke="${strokeColor}" stroke-width="1.8"/>
+          <rect x="${x + (width/2) - 5}" y="${y + 10}" width="10" height="28" rx="2" fill="#334155" stroke="#475569" stroke-width="1"/>
+          <text x="${x + (width/2)}" y="${y + 24}" fill="#f9fafb" font-size="14" font-weight="700" text-anchor="middle">${p.pin}</text>
+          <text x="${x + (width/2)}" y="${y + 40}" fill="${strokeColor}" font-size="7.5" font-weight="600" text-anchor="middle">${getMicroLabel(p.pin)}</text>
+        `;
+        svgGroup.appendChild(g);
+      });
+    }
+
+    function getMicroLabel(pin) {
+      const labels = {
+        1: "SWCAN", 2: "J1850+", 3: "MS-H", 4: "CH-GND",
+        5: "SIG-GND", 6: "CAN-H", 7: "K-LINE", 8: "DISC",
+        9: "TACH", 10: "J1850-", 11: "MS-L", 12: "DISC",
+        13: "FEPS", 14: "CAN-L", 15: "L-LINE", 16: "+12V BAT"
+      };
+      return labels[pin] || "PIN";
+    }
+
+    function renderGridPins(pins) {
+      const grid = document.getElementById('pinoutGrid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      pins.forEach(p => {
+        const box = document.createElement('div');
+        box.id = `grid-pin-${p.pin}`;
+        box.className = `pin-box ${p.is_standard ? 'standard' : 'vendor'} ${p.pin === selectedPinNum ? 'active' : ''}`;
+        box.innerHTML = `<div class="pin-num">${p.pin}</div><div class="pin-lbl">${p.name}</div>`;
+        box.onclick = () => selectPin(p.pin);
+        grid.appendChild(box);
+      });
+    }
+
+    function selectPin(pinNum) {
+      selectedPinNum = pinNum;
+
+      document.querySelectorAll('.pin-terminal').forEach(el => el.classList.remove('active'));
+      const activeSvgPin = document.getElementById(`svg-pin-${pinNum}`);
+      if (activeSvgPin) activeSvgPin.classList.add('active');
+
+      document.querySelectorAll('.pin-box').forEach(el => el.classList.remove('active'));
+      const activeGridPin = document.getElementById(`grid-pin-${pinNum}`);
+      if (activeGridPin) activeGridPin.classList.add('active');
+
+      const p = allPins.find(item => item.pin === pinNum) || defaultPinMetadata.find(item => item.pin === pinNum);
+      if (p) {
+        document.getElementById('pinDetailBadge').innerText = `Pin ${p.pin}`;
+        document.getElementById('pinDetailTitle').innerText = `Pin ${p.pin}: ${p.name} (${p.is_standard ? 'Standard SAE' : 'Manufacturer Discretionary'})`;
+        document.getElementById('pinDetailDesc').innerText = p.description;
+        
+        let notesText = p.manufacturer_note || "Standard SAE J1962 pin specification compliant with ISO 15765-4 powertrain diagnostics.";
+        document.getElementById('pinDetailNotes').innerText = `Hardware & Adapter Guidance: ${notesText}`;
+      }
+    }
+
+    async function loadPinout() {
+      try {
+        const res = await authFetch('/api/pins');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.pins && data.pins.length > 0) {
+            allPins = data.pins;
+            renderSvgPins(allPins);
+            renderGridPins(allPins);
+            selectPin(selectedPinNum);
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Diagnostic Trouble Codes (Live ECU Readout)
+    async function loadDtcs() {
+      loadImReadiness();
+      loadFreezeFrame();
+      loadMode06();
+      loadVin();
+      const container = document.getElementById('dtcListContainer');
+      try {
+        const res = await authFetch('/api/dtc');
+        if (res.ok) {
+          const data = await res.json();
+          container.innerHTML = '';
+          if (data.dtcs && data.dtcs.length > 0) {
+            data.dtcs.forEach(d => {
+              const card = document.createElement('div');
+              card.className = 'card';
+              card.style.borderLeft = '4px solid var(--danger)';
+              card.style.marginBottom = '1rem';
+              card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <h4 style="color: var(--danger); font-size: 1.1rem;">${d.code}: ${d.description}</h4>
+                  <span class="status-badge" style="background: rgba(239, 68, 68, 0.15); color: var(--danger);">${d.system}</span>
+                </div>
+                ${d.cluster ? `<p style="margin: 0.5rem 0; color: var(--warning); font-weight: 600;">Associated Failure Cluster: ${d.cluster}</p>` : ''}
+                <div style="margin-top: 0.5rem; font-size: 0.875rem;">
+                  <strong>Common Symptoms:</strong> ${d.symptoms.join(', ')}<br>
+                  <strong>Likely Causes:</strong> ${d.causes.join(', ')}
+                </div>
+              `;
+              container.appendChild(card);
+            });
+          } else {
+            container.innerHTML = '<div class="card"><p style="color: var(--accent); font-weight: 600;">No Diagnostic Trouble Codes detected (MIL OFF).</p></div>';
+          }
+        }
+      } catch (e) {}
+    }
+
+    function openClearDtcModal() {
+      const modal = document.getElementById('modal-clear-dtc-confirm');
+      if (modal) modal.classList.add('active');
+    }
+
+    function closeClearDtcModal() {
+      const modal = document.getElementById('modal-clear-dtc-confirm');
+      if (modal) modal.classList.remove('active');
+    }
+
+    async function executeClearDtcs() {
+      closeClearDtcModal();
+      try {
+        const res = await authFetch('/api/dtc/clear', { method: 'POST' });
+        if (res.ok) {
+          const d = await res.json();
+          alert('Mode 04 DTC Clear command broadcast: ' + d.status);
+          loadDtcs();
+        }
+      } catch (e) {
+        alert('Failed to clear DTCs.');
+      }
+    }
+
+    async function clearDtcs() {
+      openClearDtcModal();
+    }
+
+    // Mock Simulator Fault Injection Console
+    function showInjectFeedback(msg, isError = false) {
+      const el = document.getElementById('injectStatusMsg');
+      if (!el) return;
+      el.style.display = 'block';
+      el.style.color = isError ? 'var(--danger)' : 'var(--accent)';
+      el.innerText = msg;
+      setTimeout(() => { el.style.display = 'none'; }, 4000);
+    }
+
+    async function injectCustomDtc() {
+      const rawInput = document.getElementById('injectDtcInput').value.trim();
+      const mode = document.getElementById('injectModeSelect').value;
+      if (!rawInput) {
+        showInjectFeedback('Please enter at least one trouble code (e.g. P0171).', true);
+        return;
+      }
+      const codes = rawInput.split(/[\s,]+/).map(c => c.toUpperCase()).filter(c => c.length >= 4);
+      if (codes.length === 0) {
+        showInjectFeedback('No valid trouble codes parsed.', true);
+        return;
+      }
+
+      const payload = {
+        action: 'set',
+        stored: mode === '03' ? codes : [],
+        pending: mode === '07' ? codes : [],
+        permanent: mode === '0A' ? codes : []
+      };
+
+      try {
+        const res = await authFetch('/api/mock/dtc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          showInjectFeedback(`Successfully injected ${codes.join(', ')} into Mode ${mode}.`);
+          loadDtcs();
+        } else {
+          showInjectFeedback('Failed to inject DTCs into mock adapter.', true);
+        }
+      } catch (e) {
+        showInjectFeedback('Network error injecting codes.', true);
+      }
+    }
+
+    async function injectPresetCluster(type) {
+      const clusters = {
+        'lean_misfire': ['P0171', 'P0300'],
+        'catalyst': ['P0420'],
+        'maf_sensor': ['P0100', 'P0101'],
+        'evap_leak': ['P0442', 'P0455'],
+        'cooling': ['P0115']
+      };
+      const codes = clusters[type] || ['P0300'];
+      try {
+        const res = await authFetch('/api/mock/dtc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'set', stored: codes })
+        });
+        if (res.ok) {
+          showInjectFeedback(`Injected fault cluster: ${codes.join(', ')}.`);
+          loadDtcs();
+        }
+      } catch (e) {
+        showInjectFeedback('Error injecting preset cluster.', true);
+      }
+    }
+
+    async function resetMockSimulatorDtcs() {
+      try {
+        const res = await authFetch('/api/mock/dtc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'reset' })
+        });
+        if (res.ok) {
+          showInjectFeedback('Reset mock simulator to factory default codes (P0300, P0171).');
+          loadDtcs();
+        }
+      } catch (e) {
+        showInjectFeedback('Error resetting simulator.', true);
+      }
+    }
+
+    async function clearMockSimulatorDtcs() {
+      try {
+        const res = await authFetch('/api/mock/dtc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'clear' })
+        });
+        if (res.ok) {
+          showInjectFeedback('Cleared all codes from mock simulator (MIL OFF).');
+          loadDtcs();
+        }
+      } catch (e) {
+        showInjectFeedback('Error clearing simulator.', true);
+      }
+    }
+
+    // Reference Section: SAE DTC Directory
+    let currentSaeSystem = '';
+
+    function setSaeSystemFilter(sys) {
+      currentSaeSystem = sys;
+      document.querySelectorAll('#ref-sub-sae .chip-btn').forEach(b => b.classList.remove('active'));
+      if (sys === '') document.getElementById('chip-sys-all').classList.add('active');
+      else if (sys === 'Powertrain') document.getElementById('chip-sys-p').classList.add('active');
+      else if (sys === 'Chassis') document.getElementById('chip-sys-c').classList.add('active');
+      else if (sys === 'Body') document.getElementById('chip-sys-b').classList.add('active');
+      else if (sys === 'Network') document.getElementById('chip-sys-u').classList.add('active');
+      loadSaeReferenceDtcs();
+    }
+
+    let saeDebounceTimer = null;
+    function filterSaeDtcs() {
+      clearTimeout(saeDebounceTimer);
+      saeDebounceTimer = setTimeout(loadSaeReferenceDtcs, 200);
+    }
+
+    async function loadSaeReferenceDtcs() {
+      const search = document.getElementById('saeSearchInput') ? document.getElementById('saeSearchInput').value : '';
+      const suppOnly = document.getElementById('saeSupportedOnlyCheckbox') ? document.getElementById('saeSupportedOnlyCheckbox').checked : false;
+      const container = document.getElementById('saeDtcResultsContainer');
+      if (!container) return;
+      try {
+        const url = `/api/reference/dtc?search=${encodeURIComponent(search)}&system=${encodeURIComponent(currentSaeSystem)}&supported_only=${suppOnly}`;
+        const res = await authFetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          container.innerHTML = '';
+          if (data.dtcs && data.dtcs.length > 0) {
+            const countBanner = document.createElement('div');
+            countBanner.style.fontSize = '0.8125rem';
+            countBanner.style.color = 'var(--text-muted)';
+            countBanner.style.marginBottom = '0.75rem';
+            countBanner.innerHTML = `Showing <strong>${data.count}</strong> of <strong>${data.total_count}</strong> standard trouble codes (${data.supported_count} Supported by Connected Vehicle profile).`;
+            container.appendChild(countBanner);
+
+            data.dtcs.forEach(d => {
+              const card = document.createElement('div');
+              card.className = 'card';
+              card.style.marginBottom = '0.75rem';
+              card.style.borderLeft = d.is_supported ? '3px solid var(--accent)' : '3px solid var(--primary)';
+              const suppBadge = d.is_supported
+                ? '<span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: var(--accent); border-color: rgba(16, 185, 129, 0.3);">🟢 Supported</span>'
+                : '<span class="status-badge" style="background: rgba(148, 163, 184, 0.1); color: var(--text-muted); border-color: rgba(148, 163, 184, 0.2);">⚪ Unsupported</span>';
+              card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                  <h4 style="color: var(--primary); font-size: 1rem; margin: 0;">${d.code}: ${d.description}</h4>
+                  <div style="display: flex; gap: 0.4rem; align-items: center;">
+                    ${suppBadge}
+                    <span class="status-badge" style="background: rgba(56, 189, 248, 0.15); color: var(--primary);">${d.system}</span>
+                  </div>
+                </div>
+                ${d.cluster ? `<p style="margin: 0.35rem 0; color: var(--warning); font-size: 0.8125rem; font-weight: 600;">Cluster: ${d.cluster}</p>` : ''}
+                <div style="font-size: 0.8125rem; margin-top: 0.35rem; color: var(--text-muted);">
+                  <strong>Common Symptoms:</strong> ${(d.symptoms || []).join(', ')}<br>
+                  <strong>Likely Causes:</strong> ${(d.causes || []).join(', ')}
+                </div>
+              `;
+              container.appendChild(card);
+            });
+          } else {
+            container.innerHTML = '<div class="card"><p style="color: var(--text-muted); text-align: center;">No trouble codes match the search and vehicle support criteria.</p></div>';
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Hardware Cable and Interface Detection (SocketCAN)
+    async function checkHardwareStatus(manual = false) {
+      const badge = document.getElementById('hwStatusBadge');
+      const dot = document.getElementById('hwStatusDot');
+      const text = document.getElementById('hwStatusText');
+      const banner = document.getElementById('canHwAlertBanner');
+      const socketCanOpt = document.getElementById('optAdapterSocketCan');
+      const notice = document.getElementById('socketCanHwNotice');
+
+      try {
+        const res = await authFetch('/api/interfaces');
+        if (res.ok) {
+          const hw = await res.json();
+          if (hw.has_can_hardware) {
+            if (dot) dot.style.backgroundColor = 'var(--accent)';
+            if (badge) {
+              badge.style.background = 'rgba(16, 185, 129, 0.15)';
+              badge.style.color = 'var(--accent)';
+              badge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+            }
+            if (text) {
+              if (hw.usb_cables && hw.usb_cables.length > 0) {
+                text.innerText = `CAN: ${hw.usb_cables[0].name}`;
+              } else if (hw.is_cable_connected) {
+                text.innerText = 'CAN: Cable Connected';
+              } else {
+                text.innerText = 'CAN: vcan Active';
+              }
+            }
+            if (banner) banner.style.display = 'none';
+            if (socketCanOpt) {
+              socketCanOpt.disabled = false;
+              socketCanOpt.innerText = 'SocketCAN (can0 / vcan0) [Available]';
+            }
+            if (notice) {
+              notice.innerHTML = `<span style="color: var(--accent);">✓ Compatible CAN interface detected (${hw.summary}).</span>`;
+            }
+          } else {
+            if (dot) dot.style.backgroundColor = 'var(--danger)';
+            if (badge) {
+              badge.style.background = 'rgba(239, 68, 68, 0.15)';
+              badge.style.color = 'var(--danger)';
+              badge.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+            }
+            if (text) text.innerText = 'CAN: Not Detected';
+            if (banner) banner.style.display = 'block';
+            if (socketCanOpt) {
+              socketCanOpt.disabled = true;
+              socketCanOpt.innerText = 'SocketCAN (🔒 Hardware Not Detected)';
+            }
+            if (notice) {
+              notice.innerHTML = '<span style="color: var(--warning);">⚠️ No physical USB-to-CAN adapter or active SocketCAN device detected. Greyed out until plugged in.</span>';
+            }
+          }
+        }
+      } catch (e) {
+        if (text) text.innerText = 'CAN: Offline';
+      }
+    }
+
+    // Interactive OBD-II Code Decoder
+    function selectSampleDecode(code) {
+      const input = document.getElementById('decodeInputCode');
+      if (input) {
+        input.value = code;
+        runInteractiveDecoder(code);
+      }
+    }
+
+    async function runInteractiveDecoder(code) {
+      const clean = (code || '').toUpperCase().trim();
+      if (!clean) return;
+
+      try {
+        const res = await authFetch(`/api/decode-dtc?code=${encodeURIComponent(clean)}`);
+        if (res.ok) {
+          const d = await res.json();
+          renderDtcBreakdown(d);
+        }
+      } catch (e) {}
+    }
+
+    function renderDtcBreakdown(d) {
+      if (!d.valid) {
+        const t1 = document.getElementById('token1Char');
+        if (t1) t1.innerText = '?';
+        const tn1 = document.getElementById('token1Name');
+        if (tn1) tn1.innerText = 'Invalid Code';
+        const td1 = document.getElementById('token1Desc');
+        if (td1) td1.innerText = d.error || 'Enter 5 characters';
+        return;
+      }
+
+      // Token 1: System
+      const t1 = document.getElementById('token1Char');
+      if (t1) t1.innerText = d.system.letter;
+      const tn1 = document.getElementById('token1Name');
+      if (tn1) tn1.innerText = d.system.name;
+      const td1 = document.getElementById('token1Desc');
+      if (td1) td1.innerText = d.system.description;
+
+      // Token 2: Code Type
+      const t2 = document.getElementById('token2Char');
+      if (t2) t2.innerText = d.code_type.digit;
+      const tn2 = document.getElementById('token2Name');
+      if (tn2) tn2.innerText = d.code_type.name;
+      const td2 = document.getElementById('token2Desc');
+      if (td2) td2.innerText = d.code_type.description;
+
+      // Token 3: Subsystem
+      const t3 = document.getElementById('token3Char');
+      if (t3) t3.innerText = d.subsystem.digit;
+      const tn3 = document.getElementById('token3Name');
+      if (tn3) tn3.innerText = `Subsystem ${d.subsystem.digit}`;
+      const td3 = document.getElementById('token3Desc');
+      if (td3) td3.innerText = d.subsystem.description;
+
+      // Token 4 & 5: Fault ID
+      const t45 = document.getElementById('token45Char');
+      if (t45) t45.innerText = d.fault_id.id;
+      const tn45 = document.getElementById('token45Name');
+      if (tn45) tn45.innerText = `Index ${d.fault_id.id}`;
+      const td45 = document.getElementById('token45Desc');
+      if (td45) td45.innerText = d.fault_id.description;
+
+      // Enriched Diagnostic Box
+      const decCode = document.getElementById('decodeEnrichedCode');
+      if (decCode) decCode.innerText = d.code;
+      const decDesc = document.getElementById('decodeEnrichedDesc');
+      if (decDesc) decDesc.innerText = d.known_description || (d.system.name + ' - ' + d.subsystem.description);
+
+      const decDetails = document.getElementById('decodeEnrichedDetails');
+      if (decDetails) {
+        let detailsHtml = '';
+        if (d.symptoms && d.symptoms.length > 0) {
+          detailsHtml += `<strong>Common Symptoms:</strong> ${d.symptoms.join(', ')}<br>`;
+        }
+        if (d.causes && d.causes.length > 0) {
+          detailsHtml += `<strong>Likely Causes:</strong> ${d.causes.join(', ')}<br>`;
+        }
+        detailsHtml += '<span style="display:inline-block; margin-top: 0.35rem; color: var(--primary);"><strong>Diagnostic Strategy:</strong> Verify sensor wiring and supply voltages with an oscilloscope before replacing components.</span>';
+        decDetails.innerHTML = detailsHtml;
+      }
+    }
+
+    // I/M Readiness (Mode 01 PID 01)
+    async function loadImReadiness() {
+      const summary = document.getElementById('imSummaryRow');
+      const grid = document.getElementById('imMonitorsGrid');
+      if (!grid) return;
+      try {
+        const res = await authFetch('/api/im-readiness');
+        if (res.ok) {
+          const d = await res.json();
+          if (summary) {
+            summary.innerHTML = `
+              <div class="card" style="padding: 0.5rem 1rem; flex: 1; min-width: 140px; border-left: 3px solid ${d.mil_on ? 'var(--danger)' : 'var(--accent)'};">
+                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">MIL Lamp Status</span>
+                <div style="font-size: 1.1rem; font-weight: 700; color: ${d.mil_on ? 'var(--danger)' : 'var(--accent)'};">${d.mil_on ? '🚨 MIL ON (Check Engine)' : '✓ MIL OFF (Normal)'}</div>
+              </div>
+              <div class="card" style="padding: 0.5rem 1rem; flex: 1; min-width: 140px; border-left: 3px solid var(--primary);">
+                <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Confirmed DTC Count</span>
+                <div style="font-size: 1.1rem; font-weight: 700; color: var(--primary);">${d.dtc_count} Fault Codes</div>
+              </div>
+            `;
+          }
+          grid.innerHTML = '';
+          for (const [key, mon] of Object.entries(d.monitors || {})) {
+            const isReady = mon.status === 'Ready';
+            const isNA = mon.status === 'N/A';
+            const color = isReady ? 'var(--accent)' : (isNA ? 'var(--text-muted)' : 'var(--warning)');
+            const bg = isReady ? 'rgba(16, 185, 129, 0.12)' : (isNA ? 'rgba(148, 163, 184, 0.1)' : 'rgba(245, 158, 11, 0.12)');
+            const border = isReady ? 'rgba(16, 185, 129, 0.3)' : (isNA ? 'rgba(148, 163, 184, 0.2)' : 'rgba(245, 158, 11, 0.3)');
+            const badgeIcon = isReady ? '✓' : (isNA ? '—' : '⚠️');
+
+            const item = document.createElement('div');
+            item.className = 'card';
+            item.style.padding = '0.75rem';
+            item.style.border = `1px solid ${border}`;
+            item.style.background = bg;
+            item.innerHTML = `
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
+                <span style="font-size: 0.8125rem; font-weight: 600;">${mon.name}</span>
+                <span class="status-badge" style="background: ${bg}; color: ${color}; border-color: ${border}; font-size: 0.7rem;">${badgeIcon} ${mon.status}</span>
+              </div>
+              <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.25rem;">Type: ${mon.type}</div>
+            `;
+            grid.appendChild(item);
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Mode 02 Freeze Frame (Side-by-Side Comparison: Fault Snapshot vs Live Telemetry)
+    async function loadFreezeFrame() {
+      const container = document.getElementById('freezeFrameContent');
+      if (!container) return;
+      try {
+        const res = await authFetch('/api/freeze-frame');
+        if (res.ok) {
+          const d = await res.json();
+          if (!d.dtc) {
+            container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.875rem;">No freeze frame records stored in ECU memory (MIL OFF).</p>';
+            return;
+          }
+          const t = d.telemetry || {};
+          const live = lastTelemetryData || {};
+          
+          function formatRow(label, pid, unit) {
+            const frozenVal = t[pid] !== undefined ? t[pid] : '—';
+            const liveVal = live[pid] !== undefined ? live[pid] : '—';
+            let diffHtml = '—';
+            if (typeof frozenVal === 'number' && typeof liveVal === 'number') {
+              const diff = liveVal - frozenVal;
+              const sign = diff > 0 ? '+' : '';
+              const color = Math.abs(diff) > 0.01 ? (diff > 0 ? 'var(--warning)' : 'var(--primary)') : 'var(--accent)';
+              diffHtml = `<span style="color: ${color}; font-weight: 600;">${sign}${diff.toFixed(1)} ${unit}</span>`;
+            }
+            return `
+              <tr>
+                <td><strong>${label}</strong> <code>[PID 0x${pid}]</code></td>
+                <td style="color: var(--danger); font-weight: 700;">${frozenVal !== '—' ? frozenVal + ' ' + unit : '—'}</td>
+                <td style="color: var(--accent); font-weight: 700;">${liveVal !== '—' ? liveVal + ' ' + unit : '—'}</td>
+                <td>${diffHtml}</td>
+              </tr>
+            `;
+          }
+
+          container.innerHTML = `
+            <div style="margin-bottom: 0.75rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+              <div style="display: flex; align-items: center; gap: 0.75rem;">
+                <span class="status-badge" style="background: rgba(239, 68, 68, 0.15); color: var(--danger); font-size: 0.875rem; font-weight: 700;">Fault Code: ${d.dtc}</span>
+                <span style="font-size: 0.8125rem; color: var(--text-muted);">Frame #${d.frame_number}</span>
+              </div>
+              <span style="font-size: 0.75rem; color: var(--text-muted);">Side-by-side comparison: Fault Snapshot vs Live Telemetry</span>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Sensor Parameter</th>
+                  <th>Frozen at Fault Time (Mode 02)</th>
+                  <th>Current Value (Mode 01)</th>
+                  <th>Observed Delta</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${formatRow('Engine Speed (RPM)', '0C', 'RPM')}
+                ${formatRow('Vehicle Speed (VSS)', '0D', 'km/h')}
+                ${formatRow('Engine Coolant Temperature', '05', '°C')}
+                ${formatRow('Calculated Engine Load', '04', '%')}
+                ${formatRow('Throttle Position', '11', '%')}
+                ${formatRow('Intake Air Temperature', '0F', '°C')}
+                ${formatRow('Timing Advance', '0E', '°')}
+                ${formatRow('Mass Air Flow (MAF)', '10', 'g/s')}
+                ${formatRow('Short Term Fuel Trim', '06', '%')}
+                ${formatRow('Long Term Fuel Trim', '07', '%')}
+              </tbody>
+            </table>
+          `;
+        }
+      } catch (e) {}
+    }
+
+    // Mode 05 Oxygen Sensor Monitor Results (Legacy Vehicles)
+    async function loadMode05() {
+      const container = document.getElementById('mode05Content');
+      const select = document.getElementById('mode05TidSelect');
+      const tid = select ? select.value : '1';
+      if (!container) return;
+      try {
+        const res = await authFetch(`/api/mode05?tid=${tid}`);
+        if (res.ok) {
+          const d = await res.json();
+          const isPass = d.status === 'PASS';
+          const color = isPass ? 'var(--accent)' : 'var(--danger)';
+          const bg = isPass ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+          container.innerHTML = `
+            <table>
+              <thead>
+                <tr>
+                  <th>Test ID</th>
+                  <th>Test Description</th>
+                  <th>Measured Value</th>
+                  <th>Min Limit</th>
+                  <th>Max Limit</th>
+                  <th>Pass/Fail Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>TID 0x0${d.tid.toString(16).toUpperCase()}</code></td>
+                  <td><strong>${d.name}</strong><br><span style="font-size: 0.75rem; color: var(--text-muted);">${d.description}</span></td>
+                  <td><strong style="color: ${color};">${d.value} ${d.unit}</strong></td>
+                  <td>${d.min !== null ? d.min + ' ' + d.unit : 'None'}</td>
+                  <td>${d.max !== null ? d.max + ' ' + d.unit : 'None'}</td>
+                  <td><span class="status-badge" style="background: ${bg}; color: ${color}; font-weight: 700;">${d.status}</span></td>
+                </tr>
+              </tbody>
+            </table>
+          `;
+        }
+      } catch (e) {
+        container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.875rem;">Mode 05 is supported primarily on pre-CAN ISO/VPW/PWM diagnostic vehicles.</p>';
+      }
+    }
+
+    // Mode 06 Component Monitoring
+    async function loadMode06() {
+      const container = document.getElementById('mode06Content');
+      if (!container) return;
+      try {
+        const res = await authFetch('/api/mode06');
+        if (res.ok) {
+          const d = await res.json();
+          if (!d.tests || d.tests.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-muted); font-size: 0.875rem;">No Mode 06 component test data returned.</p>';
+            return;
+          }
+          let rows = d.tests.map(t => {
+            const isPass = t.status === 'PASS';
+            const color = isPass ? 'var(--accent)' : 'var(--danger)';
+            const bg = isPass ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+            return `
+              <tr>
+                <td><code>0x${t.obdmid}</code></td>
+                <td><strong>${t.name}</strong><br><span style="font-size: 0.75rem; color: var(--text-muted);">${t.description}</span></td>
+                <td>${t.value} ${t.unit}</td>
+                <td>${t.min !== null ? t.min + ' ' + t.unit : 'None'}</td>
+                <td>${t.max !== null ? t.max + ' ' + t.unit : 'None'}</td>
+                <td><span class="status-badge" style="background: ${bg}; color: ${color};">${t.status}</span></td>
+              </tr>
+            `;
+          }).join('');
+          container.innerHTML = `
+            <table>
+              <tr><th>MID</th><th>Monitored Component Test</th><th>Measured Value</th><th>Min Limit</th><th>Max Limit</th><th>Status</th></tr>
+              ${rows}
+            </table>
+          `;
+        }
+      } catch (e) {}
+    }
+
+    // Mode 09 Vehicle Identification Data
+    async function loadVin() {
+      const container = document.getElementById('mode09Content');
+      if (!container) return;
+      try {
+        const res = await authFetch('/api/vin');
+        if (res.ok) {
+          const d = await res.json();
+          container.innerHTML = `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem;">
+              <div class="card" style="padding: 0.75rem; border-left: 3px solid var(--primary);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Vehicle Identification Number (VIN)</div>
+                <div style="font-size: 1.15rem; font-family: monospace; font-weight: 700; color: var(--primary); margin-top: 0.25rem;">${d.vin || 'Not Available'}</div>
+              </div>
+              <div class="card" style="padding: 0.75rem; border-left: 3px solid var(--accent);">
+                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Calibration ID (CALID)</div>
+                <div style="font-size: 1.15rem; font-family: monospace; font-weight: 700; color: var(--accent); margin-top: 0.25rem;">${d.calibration_id || 'Not Available'}</div>
+              </div>
+              <div class="card" style="padding: 0.75rem; border-left: 3px solid #c084fc;">
+                <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Calibration Verification Number (CVN)</div>
+                <div style="font-size: 1.15rem; font-family: monospace; font-weight: 700; color: #c084fc; margin-top: 0.25rem;">${d.cvn || 'Not Available'}</div>
+              </div>
+            </div>
+          `;
+        }
+      } catch (e) {}
+    }
+
+    // Reference Section: Manufacturer-Specific DTCs (11 Brands + Live Search)
+    let currentMfgKey = 'toyota';
+    let mfgDebounceTimer = null;
+
+    function filterMfgDtcs() {
+      clearTimeout(mfgDebounceTimer);
+      mfgDebounceTimer = setTimeout(() => {
+        switchMfgReference(currentMfgKey);
+      }, 250);
+    }
+
+    async function switchMfgReference(mfg) {
+      currentMfgKey = mfg;
+      const allMfgs = ['toyota', 'bmw', 'volkswagen', 'gm', 'ford', 'mitsubishi', 'nissan', 'chrysler', 'honda', 'fiat', 'alfaromeo'];
+      allMfgs.forEach(k => {
+        const b = document.getElementById(`btn-mfg-${k}`);
+        if (b) {
+          if (k === mfg) b.classList.add('active');
+          else b.classList.remove('active');
+        }
+      });
+
+      const container = document.getElementById('mfgDtcResultsContainer');
+      const banner = document.getElementById('mfgProtocolBanner');
+      const search = document.getElementById('mfgSearchInput') ? document.getElementById('mfgSearchInput').value : '';
+      const suppOnly = document.getElementById('mfgSupportedOnlyCheckbox') ? document.getElementById('mfgSupportedOnlyCheckbox').checked : false;
+      if (!container) return;
+
+      try {
+        const res = await authFetch(`/api/reference/mfg-dtc?mfg=${mfg}&search=${encodeURIComponent(search)}&supported_only=${suppOnly}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (banner) {
+            const brandBadge = data.is_brand_supported
+              ? '<span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: var(--accent); margin-left: 0.5rem;">🟢 Active Vehicle Match</span>'
+              : '<span class="status-badge" style="background: rgba(148, 163, 184, 0.1); color: var(--text-muted); margin-left: 0.5rem;">⚪ Non-Matching Make</span>';
+            banner.innerHTML = `
+              <strong>${data.name} Protocol Architecture:</strong> ${data.primary_protocol} (${data.baud_rate}). 
+              <strong>ECM Header:</strong> <code>${data.ecm_header}</code>. 
+              <strong>Standard Bus Pins:</strong> ${data.supported_pins}. 
+              ${brandBadge}
+              <span style="color: var(--accent); margin-left: 0.5rem;">[Showing ${data.count} of ${data.total_count} matching codes]</span>
+            `;
+          }
+          container.innerHTML = '';
+          if (data.dtcs && data.dtcs.length > 0) {
+            data.dtcs.forEach(d => {
+              const card = document.createElement('div');
+              card.className = 'card';
+              card.style.marginBottom = '0.75rem';
+              card.style.borderLeft = d.is_supported ? '3px solid var(--accent)' : '3px solid var(--border)';
+              const suppBadge = d.is_supported
+                ? '<span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: var(--accent);">🟢 Supported</span>'
+                : '<span class="status-badge" style="background: rgba(148, 163, 184, 0.1); color: var(--text-muted);">⚪ Unsupported</span>';
+              card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                  <h4 style="color: var(--accent); font-size: 1rem; margin: 0;">${d.code}: ${d.description}</h4>
+                  <div style="display: flex; gap: 0.4rem; align-items: center;">
+                    ${suppBadge}
+                    <span class="status-badge" style="background: rgba(16, 185, 129, 0.15); color: var(--accent);">${data.name}</span>
+                  </div>
+                </div>
+                <div style="font-size: 0.8125rem; margin-top: 0.35rem; color: var(--text-muted);">
+                  <strong>Common Symptoms:</strong> ${(d.symptoms || ['Check Engine Light (MIL)']).join(', ')}<br>
+                  <strong>Likely Causes:</strong> ${(d.causes || ['Sensor or component malfunction']).join(', ')}
+                </div>
+              `;
+              container.appendChild(card);
+            });
+          } else {
+            container.innerHTML = '<div class="card"><p style="color: var(--text-muted); text-align: center;">No manufacturer codes match the search and vehicle filter criteria.</p></div>';
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Settings & Presets Management
+    function markPresetDirty() {
+      const badge = document.getElementById('presetDirtyBadge');
+      if (badge) badge.style.display = 'inline';
+    }
+
+    function clearPresetDirty() {
+      const badge = document.getElementById('presetDirtyBadge');
+      if (badge) badge.style.display = 'none';
+    }
+
+    function showPresetFeedback(msg, isError = false) {
+      const el = document.getElementById('presetFeedbackMsg');
+      if (!el) return;
+      el.style.display = 'block';
+      el.style.color = isError ? 'var(--danger)' : 'var(--accent)';
+      el.innerText = msg;
+      setTimeout(() => { el.style.display = 'none'; }, 4000);
+    }
+
+    async function refreshPresetsList() {
+      const select = document.getElementById('presetListSelect');
+      if (!select) return;
+      try {
+        const res = await authFetch('/api/presets');
+        if (res.ok) {
+          const data = await res.json();
+          select.innerHTML = '';
+          data.presets.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p;
+            opt.innerText = p;
+            select.appendChild(opt);
+          });
+          const activeName = document.getElementById('cfgPresetName').value;
+          if (data.presets.includes(activeName)) {
+            select.value = activeName;
+          }
+        }
+      } catch (e) {}
+    }
+
+    async function loadPresetFromList(name) {
+      if (!name) return;
+      try {
+        const res = await authFetch(`/api/preset?name=${encodeURIComponent(name)}`);
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById('cfgPresetName').value = data.name || name;
+          document.getElementById('cfgAdapter').value = data.adapter_type || 'mock';
+          document.getElementById('cfgHost').value = data.adapter_host || '192.168.0.10';
+          document.getElementById('cfgPort').value = data.adapter_port || 35000;
+          document.getElementById('cfgDomain').value = data.vehicle_domain || 'car';
+          clearPresetDirty();
+          showPresetFeedback(`Loaded preset "${name}" from local filesystem.`);
+        }
+      } catch (e) {
+        showPresetFeedback('Failed to load preset.', true);
+      }
+    }
+
+    async function saveActivePreset() {
+      const name = document.getElementById('cfgPresetName').value.trim() || 'default';
+      const payload = {
+        name: name,
+        adapter_type: document.getElementById('cfgAdapter').value,
+        adapter_host: document.getElementById('cfgHost').value,
+        adapter_port: parseInt(document.getElementById('cfgPort').value, 10),
+        vehicle_domain: document.getElementById('cfgDomain').value,
+      };
+      try {
+        const res = await authFetch('/api/preset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          clearPresetDirty();
+          await refreshPresetsList();
+          showPresetFeedback(`Preset "${name}" saved successfully to local filesystem!`);
+        } else {
+          showPresetFeedback('Error saving preset to filesystem.', true);
+        }
+      } catch (e) {
+        showPresetFeedback('Network error saving preset.', true);
+      }
+    }
+
+    // System File Dialogs for Presets
+    function openPresetFileDialog() {
+      const fileInput = document.getElementById('presetFileInput');
+      if (fileInput) fileInput.click();
+    }
+
+    function handlePresetFileImport(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const text = e.target.result;
+        try {
+          // Robust local YAML key-value parser adhering to zero external CDNs standard
+          const parsed = {};
+          text.split(/\r?\n/).forEach(line => {
+            const clean = line.trim();
+            if (clean && !clean.startsWith('#')) {
+              const colonIdx = clean.indexOf(':');
+              if (colonIdx > 0) {
+                const key = clean.substring(0, colonIdx).trim();
+                let val = clean.substring(colonIdx + 1).trim();
+                val = val.replace(/^["']|["']$/g, '');
+                parsed[key] = val;
+              }
+            }
+          });
+
+          if (parsed.name) document.getElementById('cfgPresetName').value = parsed.name;
+          if (parsed.adapter_type) document.getElementById('cfgAdapter').value = parsed.adapter_type;
+          if (parsed.adapter_host) document.getElementById('cfgHost').value = parsed.adapter_host;
+          if (parsed.adapter_port) document.getElementById('cfgPort').value = parseInt(parsed.adapter_port, 10) || 35000;
+          if (parsed.vehicle_domain) document.getElementById('cfgDomain').value = parsed.vehicle_domain;
+
+          markPresetDirty();
+          showPresetFeedback(`Imported configuration "${parsed.name || file.name}" from disk file.`);
+        } catch (err) {
+          showPresetFeedback('Failed to parse YAML file.', true);
+        }
+        event.target.value = '';
+      };
+      reader.readAsText(file);
+    }
+
+    function exportPresetFileDialog() {
+      const name = document.getElementById('cfgPresetName').value.trim() || 'default';
+      const adapter = document.getElementById('cfgAdapter').value;
+      const host = document.getElementById('cfgHost').value;
+      const port = document.getElementById('cfgPort').value;
+      const domain = document.getElementById('cfgDomain').value;
+
+      const yamlContent = `# SPDX-FileCopyrightText: 2026 Joel G
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# jgOBDII-Reader Preset Configuration
+name: "${name}"
+adapter_type: "${adapter}"
+adapter_host: "${host}"
+adapter_port: ${port}
+vehicle_domain: "${domain}"
+`;
+
+      const blob = new Blob([yamlContent], { type: 'application/x-yaml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${name}.yaml`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showPresetFeedback(`Exported preset "${name}.yaml" via browser file download dialog.`);
+    }
+
+
+    // Keyboard accessibility: Escape key closes open modals
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeSensorPalette();
+        closeClearDtcModal();
+      }
+    });
+
+    // Initialize all components on DOM ready
+    window.addEventListener('DOMContentLoaded', () => {
+      getLaunchToken();
+      checkHardwareStatus();
+      setInterval(checkHardwareStatus, 5000);
+      renderSvgPins(allPins);
+      renderGridPins(allPins);
+      selectPin(6);
+      loadPinout();
+      initScopes();
+      loadManufacturerData();
+      loadDtcs();
+      loadMode05();
+      loadSensorCatalogAndSupport();
+      runInteractiveDecoder('P0420');
+      pollTelemetry();
+    });
+  </script>
+</body>
+</html>

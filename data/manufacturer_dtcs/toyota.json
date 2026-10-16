@@ -1,0 +1,19 @@
+{
+  "P1130": "Air/Fuel Ratio Sensor Circuit Range/Performance (Bank 1 Sensor 1)",
+  "P1135": "Air/Fuel Ratio Sensor Heater Circuit Response (Bank 1 Sensor 1)",
+  "P1150": "Air/Fuel Ratio Sensor Circuit Range/Performance (Bank 2 Sensor 1)",
+  "P1155": "Air/Fuel Ratio Sensor Heater Circuit Response (Bank 2 Sensor 1)",
+  "P1300": "Igniter Circuit Malfunction (Cylinder No. 1 / IGF Confirmation Missing)",
+  "P1335": "Crankshaft Position Sensor Circuit (No CKP Signal While Engine Running)",
+  "P1349": "VVT System Malfunction (Bank 1 Camshaft Phase Angle Deviation)",
+  "P1440": "Secondary Air Injection System Malfunction",
+  "P1600": "ECM BATT Backup Power Supply Circuit Malfunction",
+  "C1201": "Engine Control System Malfunction (ABS / VSC System Disabled)",
+  "C1241": "Low Battery Positive Voltage or Abnormally High Power Supply",
+  "B1100": "Airbag Sensor Assembly Malfunction",
+  "P1441": "Secondary Air Injection System Switching Valve No. 2 Stuck Open",
+  "P1442": "Secondary Air Injection System Switching Valve No. 2 Stuck Closed",
+  "P1603": "Engine Stall History / Crank Without Start Detected",
+  "P1604": "Startability Malfunction / Long Crank Time Recorded",
+  "P1605": "Rough Idling Malfunction / Irregular Combustion Detected"
+}
