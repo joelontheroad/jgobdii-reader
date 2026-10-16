@@ -821,6 +821,51 @@ def _launch_browser_silently(url: str) -> None:
         logger.debug("Failed to launch web browser via standard library: %s", exc)
 
 
+def format_clickable_url(url: str, stream: Any = None) -> str:
+    """Format a URL as an OSC 8 clickable link when supported by terminal and environment.
+
+    Args:
+        url: Destination URL to format.
+        stream: Output stream to inspect for interactive TTY capabilities. Defaults to sys.stderr.
+
+    Returns:
+        OSC 8 formatted hyperlink string if on interactive TTY without NO_COLOR,
+        otherwise the plain text URL.
+    """
+    target_stream = stream if stream is not None else sys.stderr
+    no_color = os.environ.get("NO_COLOR", "") != ""
+    is_tty = hasattr(target_stream, "isatty") and target_stream.isatty()
+    if is_tty and not no_color:
+        return f"\033]8;;{url}\033\\{url}\033]8;;\033\\"
+    return url
+
+
+def open_browser(url: str, no_browser: bool = False) -> bool:
+    """Open the user's default browser window unless suppressed or running headless.
+
+    Args:
+        url: Local dashboard URL with authentication token.
+        no_browser: Whether automatic launch was explicitly suppressed by user flag.
+
+    Returns:
+        True if browser launch was dispatched, False if suppressed or headless.
+    """
+    if no_browser:
+        return False
+
+    # Standard check: suppress auto-launch in CI environments
+    if os.environ.get("CI", "").lower() == "true":
+        return False
+
+    # Check for headless Linux display server
+    if sys.platform.startswith("linux"):
+        if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+            return False
+
+    _launch_browser_silently(url)
+    return True
+
+
 def run_local_server(
     port: int = 8080,
     host: str = "127.0.0.1",
@@ -843,12 +888,7 @@ def run_local_server(
     app = create_app(auth_token=token)
     url = f"http://{host}:{port}/?token={token}"
 
-    no_color = os.environ.get("NO_COLOR", "") != ""
-    is_tty = hasattr(sys.stderr, "isatty") and sys.stderr.isatty()
-    if is_tty and not no_color:
-        clickable_link = f"\033]8;;{url}\033\\{url}\033]8;;\033\\"
-    else:
-        clickable_link = url
+    clickable_link = format_clickable_url(url, stream=sys.stderr)
 
     sys.stderr.write("\n[jgobdii-reader] Local server running at:\n\n")
     sys.stderr.write(f"    {clickable_link}\n\n")

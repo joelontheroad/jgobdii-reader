@@ -75,3 +75,56 @@ def test_reset_config(capsys: pytest.CaptureFixture):
     assert ret == 0
     captured = capsys.readouterr()
     assert "reset to factory defaults" in captured.err
+
+
+def test_serve_help_no_browser(capsys: pytest.CaptureFixture):
+    """Verify serve subcommand help documents --no-browser option."""
+    with pytest.raises(SystemExit) as excinfo:
+        main(["serve", "--help"])
+    assert excinfo.value.code == 0
+    captured = capsys.readouterr()
+    output = captured.out or captured.err
+    assert "--no-browser" in output
+
+
+def test_clickable_url_formatting(monkeypatch: pytest.MonkeyPatch):
+    """Verify format_clickable_url respects TTY detection and NO_COLOR."""
+    from app.server import format_clickable_url
+
+    class MockTTYStream:
+        def isatty(self):
+            return True
+
+    class MockNonTTYStream:
+        def isatty(self):
+            return False
+
+    url = "http://127.0.0.1:8080/?token=abc"
+
+    # 1. TTY and NO_COLOR not set -> OSC 8 link
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    osc8_link = format_clickable_url(url, stream=MockTTYStream())
+    assert f"\033]8;;{url}\033\\{url}\033]8;;\033\\" == osc8_link
+
+    # 2. Non-TTY -> plain text URL
+    plain_link = format_clickable_url(url, stream=MockNonTTYStream())
+    assert plain_link == url
+
+    # 3. NO_COLOR set -> plain text URL even on TTY
+    monkeypatch.setenv("NO_COLOR", "1")
+    nocolor_link = format_clickable_url(url, stream=MockTTYStream())
+    assert nocolor_link == url
+
+
+def test_open_browser_suppression(monkeypatch: pytest.MonkeyPatch):
+    """Verify open_browser correctly honors no_browser flag and CI environment."""
+    from app.server import open_browser
+
+    url = "http://127.0.0.1:8080"
+    # When no_browser is True, browser is never opened
+    assert open_browser(url, no_browser=True) is False
+
+    # When CI is set to true, browser is never opened
+    monkeypatch.setenv("CI", "true")
+    assert open_browser(url, no_browser=False) is False
+
