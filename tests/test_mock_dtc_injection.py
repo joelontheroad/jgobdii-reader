@@ -3,11 +3,22 @@
 
 """Tests for in-memory mock diagnostic adapter fault injection and simulator state."""
 
+from pathlib import Path
+
 import pytest
 from starlette.testclient import TestClient
 
 from app.adapters.mock import MockDiagnosticAdapter
+from app.config import ToolPreset, save_preset
 from app.server import create_app
+
+
+@pytest.fixture(autouse=True)
+def configure_mock_preset(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Ensure test suite runs against isolated mock adapter preset."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    preset = ToolPreset(name="default", adapter_type="mock")
+    save_preset(preset)
 
 
 @pytest.fixture(autouse=True)
@@ -16,6 +27,7 @@ def reset_mock_state():
     MockDiagnosticAdapter.reset_default_dtcs()
     yield
     MockDiagnosticAdapter.reset_default_dtcs()
+
 
 
 @pytest.mark.anyio

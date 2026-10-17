@@ -315,10 +315,15 @@ class MockDiagnosticAdapter(DiagnosticAdapterBase):
         if not self.is_connected:
             return {"vin": "", "calibration_id": "", "cvn": ""}
         return {
-            "vin": "1HGCR2F83HA123456",
-            "calibration_id": "37805-5A2-A050",
+            "vin": "4T1BE32K0YU123456",
+            "calibration_id": "89663-33230",
             "cvn": "E8B2C41D",
         }
+
+    async def check_vehicle_connected(self) -> bool:
+        """Check simulated vehicle connectivity. Always returns True in mock mode."""
+        return self.is_connected
+
 
     async def query_enhanced(
         self,

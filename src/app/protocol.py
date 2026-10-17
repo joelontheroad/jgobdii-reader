@@ -830,3 +830,171 @@ def is_dtc_supported_by_vehicle(
 
     # Body (B), Chassis (C), and Network (U) standard codes apply on vehicles with relevant ECUs
     return True
+
+
+_WMI_MAKE_MAP: Dict[str, str] = {
+    # Toyota / Lexus / Scion
+    "4T1": "Toyota", "4T3": "Toyota", "4T4": "Toyota", "5TD": "Toyota", "5TF": "Toyota",
+    "2T1": "Toyota", "2T2": "Lexus", "3TM": "Toyota", "JT2": "Toyota", "JT3": "Toyota",
+    "JT4": "Toyota", "JTD": "Toyota", "JTE": "Toyota", "JTM": "Toyota", "JTN": "Toyota",
+    "JTH": "Lexus", "JT6": "Lexus", "JT8": "Lexus",
+    # Honda / Acura
+    "1HG": "Honda", "2HG": "Honda", "3HG": "Honda", "5FN": "Honda", "5J6": "Honda",
+    "5J8": "Acura", "JHM": "Honda", "19U": "Acura", "2HH": "Acura",
+    # Ford / Lincoln / Mercury
+    "1FA": "Ford", "1FB": "Ford", "1FC": "Ford", "1FD": "Ford", "1FM": "Ford",
+    "1FT": "Ford", "2FM": "Ford", "2FT": "Ford", "3FA": "Ford", "3FT": "Ford",
+    "1LN": "Lincoln", "1ME": "Mercury",
+    # General Motors (Chevrolet, GMC, Buick, Cadillac, Pontiac)
+    "1G1": "Chevrolet", "1G2": "Pontiac", "1G3": "Oldsmobile", "1G4": "Buick",
+    "1GC": "Chevrolet", "1GT": "GMC", "2G1": "Chevrolet", "2GC": "Chevrolet",
+    "3GC": "Chevrolet", "1GY": "Cadillac", "3GK": "GMC", "1G6": "Cadillac",
+    # Nissan / Infiniti
+    "1N4": "Nissan", "1N6": "Nissan", "3N1": "Nissan", "5N1": "Nissan",
+    "JN1": "Nissan", "JN6": "Nissan", "JN8": "Nissan", "JNK": "Infiniti",
+    # Stellantis / Chrysler / Dodge / Jeep / Ram
+    "1C3": "Chrysler", "1C4": "Chrysler", "1C6": "Ram", "2C3": "Dodge",
+    "2C4": "Chrysler", "3C4": "Dodge", "3C6": "Ram", "1J4": "Jeep", "1D3": "Dodge",
+    # European
+    "WBA": "BMW", "WBS": "BMW M", "WBY": "BMW i", "4US": "BMW", "5UX": "BMW",
+    "WAU": "Audi", "WA1": "Audi", "TRU": "Audi",
+    "WVW": "Volkswagen", "WVG": "Volkswagen", "1V1": "Volkswagen", "3VW": "Volkswagen",
+    "WDD": "Mercedes-Benz", "WDC": "Mercedes-Benz", "4JG": "Mercedes-Benz",
+    "WP0": "Porsche", "WP1": "Porsche", "YV1": "Volvo", "YV4": "Volvo",
+    "SAL": "Land Rover", "SAJ": "Jaguar", "ZAR": "Alfa Romeo", "ZFA": "Fiat",
+    # Asian
+    "4S3": "Subaru", "4S4": "Subaru", "JF1": "Subaru", "JF2": "Subaru",
+    "5NP": "Hyundai", "KM8": "Hyundai", "KMH": "Hyundai",
+    "5XX": "Kia", "KNA": "Kia", "KND": "Kia",
+    "JM1": "Mazda", "3MZ": "Mazda", "4F2": "Mazda",
+    "JA3": "Mitsubishi", "JA4": "Mitsubishi", "MMB": "Mitsubishi",
+    # Powersports / Marine
+    "JH2": "Honda Powersports", "JK2": "Kawasaki", "JY4": "Yamaha",
+    "1HD": "Harley-Davidson", "JS1": "Suzuki", "ZDM": "Ducati",
+    "WB1": "BMW Motorrad", "2BC": "BRP / Sea-Doo", "4XA": "Polaris",
+}
+
+_COUNTRY_MAP: Dict[str, str] = {
+    "1": "United States", "4": "United States", "5": "United States",
+    "2": "Canada", "3": "Mexico",
+    "J": "Japan", "K": "South Korea",
+    "S": "United Kingdom", "V": "France/Spain", "W": "Germany",
+    "Z": "Italy", "M": "India", "L": "China",
+}
+
+
+def decode_vin(vin: Optional[str]) -> Dict[str, Any]:
+    """Decode a 17-character ISO 3779 Vehicle Identification Number into structured details.
+
+    Deconstructs World Manufacturer Identifier (WMI), 10th-character Model Year,
+    country of manufacture, and vehicle model heuristics.
+
+    Args:
+        vin: 17-character alphanumeric VIN string, or empty/None.
+
+    Returns:
+        Dictionary containing validation flag, normalized VIN, year, make,
+        model, country of origin, and a human-readable display string.
+    """
+    if not vin or len(vin.strip()) < 11:
+        return {
+            "valid": False,
+            "vin": "",
+            "year": None,
+            "make": None,
+            "model": None,
+            "country": None,
+            "display": "Vehicle: Not Detected",
+        }
+
+    clean_vin = vin.strip().upper()
+    wmi = clean_vin[:3]
+    make = _WMI_MAKE_MAP.get(wmi)
+    if not make and len(wmi) >= 2:
+        # Fallback to 2-character country/make prefix if 3rd character is division
+        make = _WMI_MAKE_MAP.get(wmi[:2] + "1") or _WMI_MAKE_MAP.get(wmi[:2] + "A")
+
+    # Character 1: Country
+    country = _COUNTRY_MAP.get(clean_vin[0], "International")
+
+    # Character 10: Model Year
+    # Standard ISO 3779 model year codes:
+    # 2000: Y, 2001-2009: 1-9, 2010-2026: A-T
+    year_char = clean_vin[9] if len(clean_vin) >= 10 else ""
+    year: Optional[int] = None
+    if year_char.isdigit():
+        digit = int(year_char)
+        if 1 <= digit <= 9:
+            year = 2000 + digit
+    elif year_char == "Y":
+        year = 2000
+    elif year_char in ("T", "V", "W", "X") and len(clean_vin) >= 7 and not clean_vin[6].isdigit():
+        # Pre-2000 1996-1999 OBD-II era
+        pre_2000 = {"T": 1996, "V": 1997, "W": 1998, "X": 1999}
+        year = pre_2000.get(year_char)
+    else:
+        # 2010+ cycle (A=2010, B=2011, ..., T=2026)
+        letter_to_year = {
+            "A": 2010, "B": 2011, "C": 2012, "D": 2013, "E": 2014, "F": 2015,
+            "G": 2016, "H": 2017, "J": 2018, "K": 2019, "L": 2020, "M": 2021,
+            "N": 2022, "P": 2023, "R": 2024, "S": 2025, "T": 2026,
+        }
+        year = letter_to_year.get(year_char)
+
+    # Model heuristics from VDS (characters 4-8)
+    model: Optional[str] = None
+    vds = clean_vin[3:8]
+    if make == "Toyota":
+        if "BE3" in vds or "BK3" in vds or "SK2" in vds:
+            model = "Camry"
+        elif "CE1" in vds or "ZE1" in vds:
+            model = "Corolla"
+        elif "UZJ" in vds or "URJ" in vds:
+            model = "Land Cruiser"
+        elif "ZN6" in vds:
+            model = "86 / GR86"
+        else:
+            model = "Passenger Car"
+    elif make == "Honda":
+        if "CR2" in vds or "CP2" in vds:
+            model = "Accord"
+        elif "FC1" in vds or "FG3" in vds:
+            model = "Civic"
+        elif "RW1" in vds:
+            model = "CR-V"
+        else:
+            model = "Passenger Car"
+    elif make == "Ford":
+        if "F15" in vds or "FW1" in vds or "FTW" in vds:
+            model = "F-150"
+        elif "P8C" in vds or "P8A" in vds:
+            model = "Mustang"
+        else:
+            model = "Vehicle"
+    elif make == "Chevrolet":
+        if "C15" in vds or "K15" in vds:
+            model = "Silverado"
+        elif "1YY" in vds:
+            model = "Corvette"
+        else:
+            model = "Vehicle"
+
+    parts = []
+    if year:
+        parts.append(str(year))
+    if make:
+        parts.append(make)
+    if model:
+        parts.append(model)
+
+    display = " ".join(parts) if parts else (make or "OBD-II Vehicle")
+
+    return {
+        "valid": True,
+        "vin": clean_vin,
+        "year": year,
+        "make": make or "Generic",
+        "model": model or "",
+        "country": country,
+        "display": display,
+    }

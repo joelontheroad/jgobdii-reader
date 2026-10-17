@@ -399,3 +399,52 @@ class SocketCanAdapter(DiagnosticAdapterBase):
             "protocol": "ISO 15765-4 CAN (Raw Sockets)",
         }
 
+    async def query_vin(self) -> Dict[str, str]:
+        """Query Mode 09 PID 02 for Vehicle Identification Number via SocketCAN."""
+        if not self.is_connected:
+            return {"vin": "", "calibration_id": "", "cvn": ""}
+
+        # Send functional request: Mode 09 PID 02
+        payload = [0x02, 0x09, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00]
+        self._send_frame(0x7DF, bytes(payload))
+
+        # Collect response frames from ECU
+        start = time.monotonic()
+        ascii_chars = []
+        while (time.monotonic() - start) < 0.8:
+            frame = self._recv_frame(timeout_sec=0.05)
+            if frame and 0x7E8 <= frame.can_id <= 0x7EF:
+                # Inspect data bytes for ASCII VIN characters (0-9, A-Z)
+                for b in frame.data:
+                    if (0x30 <= b <= 0x39) or (0x41 <= b <= 0x5A):
+                        ascii_chars.append(chr(b))
+            await asyncio.sleep(0.005)
+
+        candidate = "".join(ascii_chars)
+        vin = candidate[-17:] if len(candidate) >= 17 else candidate
+        return {"vin": vin, "calibration_id": "", "cvn": ""}
+
+    async def check_vehicle_connected(self) -> bool:
+        """Check if vehicle ECU responds to standard 0x7DF functional request.
+
+        Transmits Mode 01 PID 00 broadcast to 0x7DF. If ECU is active,
+        an ECU in the 0x7E8..0x7EF range responds with 41 00.
+
+        Returns:
+            True if vehicle ECU acknowledges broadcast, False otherwise.
+        """
+        if not self.is_connected or not self.sock:
+            return False
+        payload = [0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        if not self._send_frame(0x7DF, bytes(payload)):
+            return False
+        start = time.monotonic()
+        while (time.monotonic() - start) < 0.25:
+            frame = self._recv_frame(timeout_sec=0.05)
+            if frame and 0x7E8 <= frame.can_id <= 0x7EF:
+                if len(frame.data) >= 3 and frame.data[1] == 0x41 and frame.data[2] == 0x00:
+                    return True
+            await asyncio.sleep(0.005)
+        return False
+
+

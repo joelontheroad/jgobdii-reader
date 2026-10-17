@@ -3,14 +3,26 @@
 
 """Tests for server presets management and SAE / OEM reference endpoints."""
 
+from pathlib import Path
+
+import pytest
 from starlette.testclient import TestClient
 
+from app.config import ToolPreset, save_preset
 from app.server import create_app
+
+
+@pytest.fixture(autouse=True)
+def configure_mock_preset(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Ensure test suite runs against isolated mock adapter preset."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    preset = ToolPreset(name="default", adapter_type="mock")
+    save_preset(preset)
 
 
 def test_presets_list_and_load_endpoints(tmp_path, monkeypatch):
     """Verify listing presets and loading active configuration."""
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+
 
     app = create_app()
     token = app.state.auth_token

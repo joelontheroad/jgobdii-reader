@@ -145,3 +145,20 @@ class DiagnosticAdapterBase(ABC):
             Dictionary with test value, thresholds, and status, or None if unsupported.
         """
         return None
+
+    async def query_vin(self) -> Dict[str, str]:
+        """Query Mode 09 vehicle identification, calibration ID, and CVN.
+
+        Returns:
+            Dictionary containing 'vin', 'calibration_id', and 'cvn' strings.
+        """
+        return {"vin": "", "calibration_id": "", "cvn": ""}
+
+    async def check_vehicle_connected(self) -> bool:
+        """Check if vehicle ECU is actively responding to OBD-II queries.
+
+        Returns:
+            True if vehicle ECU acknowledges diagnostic requests, False otherwise.
+        """
+        return self.is_connected
+

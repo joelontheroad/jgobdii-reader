@@ -291,7 +291,7 @@ class AsyncELM327Adapter(DiagnosticAdapterBase):
         if not self.is_connected:
             return None
 
-        raw = await self.send_command(f"05{tid:02X}")
+        raw = await self._send_command(f"05{tid:02X}")
         bytes_list = parse_hex_bytes(raw)
         # Look for Mode 05 response byte 0x45
         for i, b in enumerate(bytes_list):
@@ -299,3 +299,63 @@ class AsyncELM327Adapter(DiagnosticAdapterBase):
                 return decode_mode05_test(tid, bytes_list[i + 1:])
 
         return None
+
+    async def query_vin(self) -> Dict[str, str]:
+        """Query Mode 09 vehicle identification, calibration ID, and CVN via ELM327."""
+        if not self.is_connected:
+            return {"vin": "", "calibration_id": "", "cvn": ""}
+
+        # Mode 09 PID 02: VIN
+        raw_vin = await self._send_command("0902")
+        clean_vin_resp = raw_vin.replace(" ", "").replace("\r", "").replace("\n", "")
+        extracted_vin = ""
+
+        # Scan for ASCII alphanumeric characters (0-9, A-Z) in hexadecimal byte stream
+        if "4902" in clean_vin_resp:
+            import re
+            hex_pairs = re.findall(r"[0-9A-Fa-f]{2}", clean_vin_resp)
+            chars = []
+            for h in hex_pairs:
+                val = int(h, 16)
+                if (0x30 <= val <= 0x39) or (0x41 <= val <= 0x5A):
+                    chars.append(chr(val))
+            candidate = "".join(chars)
+            # Standard VIN is exactly 17 characters
+            if len(candidate) >= 17:
+                extracted_vin = candidate[-17:]
+            elif len(candidate) >= 11:
+                extracted_vin = candidate
+
+        # Mode 09 PID 04: Calibration ID
+        raw_cal = await self._send_command("0904")
+        cal_id = raw_cal.strip().replace("\r", "").replace("\n", "") if raw_cal else ""
+        if "4904" in cal_id.replace(" ", ""):
+            cal_id = cal_id.replace(" ", "")
+
+        # Mode 09 PID 06: CVN
+        raw_cvn = await self._send_command("0906")
+        cvn = raw_cvn.strip().replace("\r", "").replace("\n", "") if raw_cvn else ""
+
+        return {
+            "vin": extracted_vin,
+            "calibration_id": cal_id,
+            "cvn": cvn,
+        }
+
+    async def check_vehicle_connected(self) -> bool:
+        """Check if vehicle ECU is actively responding to Mode 01 queries.
+
+        Sends Mode 01 PID 00. If the vehicle ignition is OFF or ECU is not responding,
+        ELM327 returns 'UNABLE TO CONNECT', 'BUS INIT: ERROR', or 'NO DATA'.
+
+        Returns:
+            True if vehicle ECU answers with 41 00, False if disconnected or offline.
+        """
+        if not self.is_connected:
+            return False
+        resp = await self._send_command("0100")
+        clean = resp.replace(" ", "").upper()
+        if any(err in clean for err in ["UNABLE", "BUSINIT", "ERROR", "NODATA", "STOPPED", "TIMEOUT"]):
+            return False
+        return "4100" in clean or "41 00" in resp
+

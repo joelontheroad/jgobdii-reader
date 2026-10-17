@@ -82,8 +82,54 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       background: rgba(16, 185, 129, 0.15);
       color: var(--accent);
       border: 1px solid rgba(16, 185, 129, 0.3);
+      transition: all 0.2s ease;
+    }
+    .status-badge.connected {
+      background: rgba(16, 185, 129, 0.15) !important;
+      color: #34d399 !important;
+      border: 1px solid rgba(16, 185, 129, 0.35) !important;
+    }
+    .status-badge.connected .badge-dot {
+      background-color: #10b981 !important;
+      box-shadow: 0 0 6px #10b981;
+    }
+    .status-badge.disconnected {
+      background: rgba(239, 68, 68, 0.15) !important;
+      color: #f87171 !important;
+      border: 1px solid rgba(239, 68, 68, 0.35) !important;
+    }
+    .status-badge.disconnected .badge-dot {
+      background-color: #ef4444 !important;
+      box-shadow: 0 0 6px #ef4444;
+    }
+    .status-badge.mock {
+      background: rgba(245, 158, 11, 0.15) !important;
+      color: #fbbf24 !important;
+      border: 1px solid rgba(245, 158, 11, 0.35) !important;
+    }
+    .status-badge.mock .badge-dot {
+      background-color: #f59e0b !important;
+      box-shadow: 0 0 6px #f59e0b;
+    }
+    .status-badge.adapter_only, .status-badge.adapter-only {
+      background: rgba(234, 179, 8, 0.15) !important;
+      color: #facc15 !important;
+      border: 1px solid rgba(234, 179, 8, 0.35) !important;
+    }
+    .status-badge.adapter_only .badge-dot, .status-badge.adapter-only .badge-dot {
+      background-color: #eab308 !important;
+    }
+    .status-badge.vehicle {
+      background: rgba(168, 85, 247, 0.15) !important;
+      color: #c084fc !important;
+      border: 1px solid rgba(168, 85, 247, 0.35) !important;
+      max-width: 320px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .badge-dot { width: 8px; height: 8px; border-radius: 50%; background-color: var(--accent); }
+
 
     .nav-tabs {
       display: flex;
@@ -412,9 +458,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
   <header>
     <div class="brand-section">
       <div class="brand-title">jgOBDII-Reader</div>
-      <div class="status-badge" id="connBadge">
+      <div class="status-badge disconnected" id="connBadge">
         <span class="badge-dot" id="connDot"></span>
-        <span id="connLabel">Connected (ELM327 Wi-Fi)</span>
+        <span id="connLabel">Checking Connection...</span>
+      </div>
+      <div class="status-badge vehicle" id="vehicleHeaderBadge" title="Detected Vehicle Make, Model, and Year from Mode 09 VIN">
+        <span id="vehicleHeaderText">🚗 Vehicle: Not Detected</span>
       </div>
       <div class="status-badge" style="background: rgba(56, 189, 248, 0.15); color: var(--primary); border-color: rgba(56, 189, 248, 0.3);">
         <span id="vehicleLabel">Passenger Car (CAN 500k)</span>
@@ -441,8 +490,29 @@ SPDX-License-Identifier: AGPL-3.0-or-later
   <main>
     <!-- TAB 1: Oscilloscope & Telemetry Gauges -->
     <section id="tab-scope" class="tab-content active" role="tabpanel">
+      <!-- Disconnected Notification Banner -->
+      <div id="disconnectedAlertBanner" class="card" style="display: none; border-left: 4px solid var(--danger); background: rgba(239, 68, 68, 0.08); margin-bottom: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+            <span style="font-size: 1.5rem;">⚠️</span>
+            <div>
+              <h4 style="margin: 0; color: #f87171; font-size: 0.95rem; font-weight: 700;" id="bannerTitle">OBD-II Adapter Disconnected</h4>
+              <p style="margin: 0.25rem 0 0 0; color: var(--text-muted); font-size: 0.8125rem;" id="bannerMessage">
+                No OBD-II adapter detected at configured address. Live gauges are paused to prevent displaying misleading simulated data.
+              </p>
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-primary" style="background-color: #f59e0b; border-color: #d97706; color: #000; font-weight: 600;" onclick="switchToMockAdapter()" id="btnSwitchMock">🟡 Switch to Mock Simulator</button>
+            <button class="btn btn-outline" onclick="pollConnectionStatus(true)" id="btnRetryConn">🔄 Retry Connection</button>
+            <button class="btn btn-outline" onclick="openTab('tab-settings')">⚙️ Settings</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Gauge Customizer Controls -->
       <div class="card" style="margin-bottom: 1.25rem;">
+
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
           <div>
             <h3 style="font-size: 1rem; color: var(--primary);">Live Telemetry Gauges (Mode 01)</h3>
@@ -1691,6 +1761,87 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       });
     }
 
+    // Two-Tier Connection Status Management
+    let currentConnectionState = null;
+
+    async function pollConnectionStatus(force = false) {
+      try {
+        const url = force ? '/api/connection-status?force=true' : '/api/connection-status';
+        const res = await authFetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          currentConnectionState = data;
+          updateConnectionUI(data);
+        }
+      } catch (e) {
+        console.debug('Connection status poll failed:', e);
+      }
+      if (!force) {
+        setTimeout(pollConnectionStatus, 1500);
+      }
+    }
+
+    function updateConnectionUI(data) {
+      const badge = document.getElementById('connBadge');
+      const label = document.getElementById('connLabel');
+      const vBadge = document.getElementById('vehicleHeaderBadge');
+      const vText = document.getElementById('vehicleHeaderText');
+      const banner = document.getElementById('disconnectedAlertBanner');
+      const bannerTitle = document.getElementById('bannerTitle');
+      const bannerMsg = document.getElementById('bannerMessage');
+
+      if (!badge || !label) return;
+
+      badge.className = 'status-badge ' + (data.status_state || 'disconnected');
+      label.innerText = data.status_text || 'Disconnected';
+
+      // Update Top Header Vehicle Display (Year, Make, Model decoded from VIN)
+      if (vBadge && vText) {
+        if (data.vehicle && data.vehicle.display) {
+          vText.innerText = '🚗 ' + data.vehicle.display;
+          if (data.status_state === 'vehicle_connected' || data.status_state === 'mock') {
+            vBadge.style.opacity = '1.0';
+          } else {
+            vBadge.style.opacity = '0.5';
+          }
+        } else {
+          vText.innerText = '🚗 Vehicle: Not Detected';
+          vBadge.style.opacity = '0.5';
+        }
+      }
+
+      // Update Disconnected / Key OFF Alert Banner
+      if (banner && bannerTitle && bannerMsg) {
+        if (data.status_state === 'disconnected') {
+          banner.style.display = 'block';
+          banner.style.borderLeftColor = 'var(--danger)';
+          bannerTitle.innerText = '⚠️ OBD-II Adapter Disconnected';
+          bannerTitle.style.color = '#f87171';
+          bannerMsg.innerText = data.status_message || 'Cannot reach configured adapter. Connect your adapter or switch to Mock Simulator.';
+        } else if (data.status_state === 'adapter_only') {
+          banner.style.display = 'block';
+          banner.style.borderLeftColor = '#eab308';
+          bannerTitle.innerText = '⚠️ Vehicle Ignition Key OFF';
+          bannerTitle.style.color = '#facc15';
+          bannerMsg.innerText = data.status_message || 'Adapter is online, but vehicle ECU is not answering. Turn ignition to ON position.';
+        } else {
+          banner.style.display = 'none';
+        }
+      }
+    }
+
+    async function switchToMockAdapter() {
+      try {
+        const res = await authFetch('/api/adapter/switch?adapter_type=mock', { method: 'POST' });
+        if (res.ok) {
+          await pollConnectionStatus(true);
+          await pollTelemetry();
+        }
+      } catch (e) {
+        console.error('Failed to switch adapter:', e);
+      }
+    }
+
     // Telemetry Polling Loop
     async function pollTelemetry() {
       try {
@@ -1698,18 +1849,47 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         if (res.ok) {
           const d = await res.json();
           lastTelemetryData = d;
-          const rpm = d['0C'] || 800;
-          const speed = d['0D'] || 0;
+          const isConnected = d.connected === true || (currentConnectionState && currentConnectionState.is_mock);
+
+          if (!isConnected) {
+            // Disconnected: Show -- on gauges and flatline/pause scopes
+            document.getElementById('valRpm').innerHTML = '--<span class="metric-unit">RPM</span>';
+            document.getElementById('valSpeed').innerHTML = '--<span class="metric-unit">km/h</span>';
+            document.getElementById('valVssHz').innerHTML = '0.0<span class="metric-unit">Hz</span>';
+            document.getElementById('valCoolant').innerHTML = '--<span class="metric-unit">°C</span>';
+            document.getElementById('valThrottle').innerHTML = '--<span class="metric-unit">%</span>';
+            document.getElementById('valMaf').innerHTML = '--<span class="metric-unit">g/s</span>';
+            document.getElementById('valLoad').innerHTML = '--<span class="metric-unit">%</span>';
+            document.getElementById('valIat').innerHTML = '--<span class="metric-unit">°C</span>';
+            document.getElementById('valStft').innerHTML = '--<span class="metric-unit">%</span>';
+            document.getElementById('valO2').innerHTML = '--<span class="metric-unit">V</span>';
+
+            for (let i = 0; i < activeScopeCount; i++) {
+              scopeBuffers[i].shift();
+              scopeBuffers[i].push(0);
+              const valEl = document.getElementById(`scopeVal-${i}`);
+              if (valEl) {
+                valEl.innerText = '-- (Offline)';
+              }
+            }
+            setTimeout(pollTelemetry, 1000);
+            return;
+          }
+
+          const rpm = d['0C'] !== undefined && d['0C'] !== null ? d['0C'] : (d.is_mock ? 800 : 0);
+          const speed = d['0D'] !== undefined && d['0D'] !== null ? d['0D'] : 0;
           const vssHz = d['vss_hz'] || 0.0;
-          const coolant = d['05'] || 85;
-          const throttle = d['11'] || 15;
-          const maf = d['10'] || 3.5;
-          const load = d['04'] || 25;
-          const iat = d['0F'] || 28;
-          const stft = d['06'] !== undefined ? d['06'] : 0.0;
-          
-          o2SimPhase += 0.15;
-          const o2v = d['14'] !== undefined ? d['14'] : (0.45 + 0.4 * Math.sin(o2SimPhase));
+          const coolant = d['05'] !== undefined && d['05'] !== null ? d['05'] : 85;
+          const throttle = d['11'] !== undefined && d['11'] !== null ? d['11'] : 15;
+          const maf = d['10'] !== undefined && d['10'] !== null ? d['10'] : 3.5;
+          const load = d['04'] !== undefined && d['04'] !== null ? d['04'] : 25;
+          const iat = d['0F'] !== undefined && d['0F'] !== null ? d['0F'] : 28;
+          const stft = d['06'] !== undefined && d['06'] !== null ? d['06'] : 0.0;
+
+          if (d.is_mock) {
+            o2SimPhase += 0.15;
+          }
+          const o2v = d['14'] !== undefined && d['14'] !== null ? d['14'] : (0.45 + 0.4 * Math.sin(o2SimPhase));
 
           // Update DOM gauge readouts
           document.getElementById('valRpm').innerHTML = rpm + '<span class="metric-unit">RPM</span>';
@@ -1721,7 +1901,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
           document.getElementById('valLoad').innerHTML = load + '<span class="metric-unit">%</span>';
           document.getElementById('valIat').innerHTML = iat + '<span class="metric-unit">°C</span>';
           document.getElementById('valStft').innerHTML = (stft > 0 ? '+' : '') + stft + '<span class="metric-unit">%</span>';
-          document.getElementById('valO2').innerHTML = o2v.toFixed(3) + '<span class="metric-unit">V</span>';
+          document.getElementById('valO2').innerHTML = (typeof o2v === 'number' ? o2v.toFixed(3) : o2v) + '<span class="metric-unit">V</span>';
 
           const liveDataMap = {
             'o2': o2v,
@@ -1738,12 +1918,13 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
           // Also map any hex PIDs directly
           for (const [k, v] of Object.entries(d)) {
-            liveDataMap[k.toLowerCase()] = v;
-            // Update dynamic gauge card if present
-            const dynEl = document.getElementById(`valDyn-${k}`);
-            if (dynEl) {
-              const u = SCOPE_CHANNELS[k.toLowerCase()] ? SCOPE_CHANNELS[k.toLowerCase()].unit : '';
-              dynEl.innerHTML = (typeof v === 'number' ? (v % 1 !== 0 ? v.toFixed(2) : v) : v) + `<span class="metric-unit">${u}</span>`;
+            if (v !== null && v !== undefined) {
+              liveDataMap[k.toLowerCase()] = v;
+              const dynEl = document.getElementById(`valDyn-${k}`);
+              if (dynEl) {
+                const u = SCOPE_CHANNELS[k.toLowerCase()] ? SCOPE_CHANNELS[k.toLowerCase()].unit : '';
+                dynEl.innerHTML = (typeof v === 'number' ? (v % 1 !== 0 ? v.toFixed(2) : v) : v) + `<span class="metric-unit">${u}</span>`;
+              }
             }
           }
 
@@ -1764,6 +1945,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       } catch (e) {}
       setTimeout(pollTelemetry, 250);
     }
+
 
     // Manufacturer Enhanced Data
     async function loadManufacturerData() {
@@ -2778,8 +2960,10 @@ vehicle_domain: "${domain}"
     // Initialize all components on DOM ready
     window.addEventListener('DOMContentLoaded', () => {
       getLaunchToken();
+      pollConnectionStatus(true);
       checkHardwareStatus();
       setInterval(checkHardwareStatus, 5000);
+
       renderSvgPins(allPins);
       renderGridPins(allPins);
       selectPin(6);

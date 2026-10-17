@@ -3,6 +3,7 @@
 
 """Lightweight local web server adhering to localhost binding, W3C CSP, and launch token auth."""
 
+import asyncio
 import logging
 import os
 import secrets
@@ -10,9 +11,10 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import (
     Depends,
@@ -28,6 +30,7 @@ from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.adapters import get_adapter
+from app.adapters.base import DiagnosticAdapterBase
 from app.adapters.mock import MockDiagnosticAdapter
 from app.config import ToolPreset, list_presets, load_preset, save_preset
 from app.dtc import DtcDatabase
@@ -40,6 +43,7 @@ from app.protocol import (
     decode_im_readiness,
     decode_mode05_test,
     decode_pid,
+    decode_vin,
     get_mode01_pid_catalog,
     get_supported_protocols,
     is_dtc_supported_by_vehicle,
@@ -47,6 +51,59 @@ from app.protocol import (
 from app.vehicles import get_vehicle_profile
 
 logger = logging.getLogger(__name__)
+
+_last_conn_probe_time: float = 0.0
+_last_conn_connected: bool = False
+_last_vehicle_detected: bool = False
+_cached_vehicle_info: Optional[Dict[str, Any]] = None
+
+
+async def _get_active_adapter(
+    preset: ToolPreset,
+    vehicle_prof: Optional[Any] = None,
+    force_probe: bool = False,
+) -> Tuple[DiagnosticAdapterBase, bool, bool]:
+    """Retrieve and connect to the configured adapter without silent mock fallback.
+
+    Args:
+        preset: Active ToolPreset.
+        vehicle_prof: Optional vehicle domain profile.
+        force_probe: If True, bypasses negative probe cooldown cache.
+
+    Returns:
+        Tuple of (adapter_instance, is_connected, is_mock).
+    """
+    global _last_conn_probe_time, _last_conn_connected, _last_vehicle_detected, _cached_vehicle_info
+    is_mock = preset.adapter_type == "mock"
+    adapter = get_adapter(
+        adapter_type=preset.adapter_type,
+        host=preset.adapter_host,
+        port=preset.adapter_port,
+        device_name=getattr(preset, "socketcan_channel", "can0"),
+        protocol_cmd=vehicle_prof.protocol_cmd if vehicle_prof else "ATSP0",
+    )
+    if is_mock:
+        await adapter.connect()
+        return adapter, True, True
+
+    # Cooldown on failed network probes (1.5 seconds) to prevent blocking HTTP workers
+    now = time.monotonic()
+    if not force_probe and not _last_conn_connected and (now - _last_conn_probe_time) < 1.5:
+        return adapter, False, False
+
+    _last_conn_probe_time = now
+    try:
+        connected = await asyncio.wait_for(adapter.connect(), timeout=1.8)
+    except Exception:
+        connected = False
+
+    _last_conn_connected = connected
+    if not connected:
+        _last_vehicle_detected = False
+        _cached_vehicle_info = None
+
+    return adapter, connected, False
+
 
 
 class MockDtcRequest(BaseModel):
@@ -145,63 +202,201 @@ def create_app(auth_token: Optional[str] = None) -> FastAPI:
         )
         return resp
 
+    @app.get("/api/connection-status")
+    async def get_connection_status(
+        force: bool = False,
+        auth: str = Depends(verify_auth),
+    ):
+        """Retrieve authoritative two-tier adapter and vehicle ECU connection status."""
+        global _last_vehicle_detected, _cached_vehicle_info
+        preset = load_preset("default")
+        vehicle_prof = get_vehicle_profile(preset.vehicle_domain)
+        adapter, is_connected, is_mock = await _get_active_adapter(preset, vehicle_prof, force_probe=force)
+
+        battery_voltage = None
+        detected_protocol = None
+        vehicle_detected = False
+        vehicle_info = {
+            "year": None,
+            "make": None,
+            "model": None,
+            "vin": None,
+            "display": "Vehicle: Not Detected",
+        }
+
+        if is_mock:
+            status_state = "mock"
+            status_text = "Mock Simulator (Offline)"
+            status_msg = "Running built-in mock simulation mode."
+            vehicle_detected = True
+            vehicle_info = {
+                "year": 2000,
+                "make": "Toyota",
+                "model": "Camry V6",
+                "vin": "4T1BE32K0YU123456",
+                "display": "2000 Toyota Camry V6 (Simulated)",
+            }
+        elif not is_connected:
+            status_state = "disconnected"
+            adapter_name = adapter.get_capabilities().adapter_type
+            if preset.adapter_type == "elm327":
+                status_text = "Disconnected (ELM327 Wi-Fi)"
+                status_msg = f"Cannot reach ELM327 Wi-Fi adapter at {preset.adapter_host}:{preset.adapter_port}."
+            elif preset.adapter_type == "socketcan":
+                status_text = "Disconnected (SocketCAN)"
+                status_msg = f"Cannot access CAN interface '{getattr(preset, 'socketcan_channel', 'can0')}'."
+            else:
+                status_text = f"Disconnected ({adapter_name})"
+                status_msg = f"Could not connect to {adapter_name}."
+        else:
+            status_data = adapter.get_status()
+            battery_voltage = status_data.get("battery_voltage")
+            detected_protocol = status_data.get("protocol")
+
+            try:
+                vehicle_detected = await adapter.check_vehicle_connected()
+            except Exception:
+                vehicle_detected = False
+
+            _last_vehicle_detected = vehicle_detected
+
+            if vehicle_detected:
+                status_state = "vehicle_connected"
+                volt_str = f" - {battery_voltage}" if battery_voltage else ""
+                status_text = f"Connected ({adapter.get_capabilities().adapter_type}{volt_str})"
+                status_msg = f"Actively communicating with vehicle ECU via {detected_protocol or 'OBD-II'}."
+
+                if _cached_vehicle_info and _cached_vehicle_info.get("valid"):
+                    vehicle_info = _cached_vehicle_info
+                else:
+                    try:
+                        vin_data = await adapter.query_vin()
+                        decoded = decode_vin(vin_data.get("vin", ""))
+                        if decoded.get("valid"):
+                            _cached_vehicle_info = decoded
+                            vehicle_info = decoded
+                        else:
+                            vehicle_info["display"] = f"Generic {vehicle_prof.display_name}"
+                    except Exception:
+                        vehicle_info["display"] = f"Generic {vehicle_prof.display_name}"
+            else:
+                status_state = "adapter_only"
+                status_text = "Adapter Online (Vehicle Key OFF)"
+                status_msg = (
+                    "Adapter link established, but vehicle ECU is not responding. "
+                    "Ensure vehicle ignition is turned to the ON (Run) position."
+                )
+
+        if is_connected:
+            await adapter.disconnect()
+
+        return {
+            "configured_adapter": preset.adapter_type,
+            "adapter_connected": is_connected,
+            "vehicle_detected": vehicle_detected,
+            "is_mock": is_mock,
+            "battery_voltage": battery_voltage,
+            "protocol": detected_protocol,
+            "status_state": status_state,
+            "status_text": status_text,
+            "status_message": status_msg,
+            "vehicle": vehicle_info,
+        }
+
+    @app.post("/api/adapter/switch")
+    async def switch_adapter(
+        adapter_type: str = Query("mock"),
+        auth: str = Depends(verify_auth),
+    ):
+        """Switch active adapter type (e.g. 'mock', 'elm327', 'socketcan')."""
+        global _last_conn_probe_time, _last_conn_connected, _cached_vehicle_info
+        valid = ["elm327", "socketcan", "j2534", "mock"]
+        clean_type = adapter_type.strip().lower()
+        if clean_type not in valid:
+            raise HTTPException(status_code=400, detail=f"Invalid adapter type '{adapter_type}'. Must be one of {valid}")
+
+        preset = load_preset("default")
+        preset.adapter_type = clean_type
+        save_preset(preset)
+
+        _last_conn_probe_time = 0.0
+        _last_conn_connected = False
+        _cached_vehicle_info = None
+
+        return {"status": "switched", "adapter_type": clean_type}
+
     @app.get("/api/status")
     async def get_status(auth: str = Depends(verify_auth)):
         """Retrieve connection health, detected protocol, and adapter capabilities."""
         preset = load_preset("default")
         vehicle_prof = get_vehicle_profile(preset.vehicle_domain)
-        adapter = get_adapter(
-            adapter_type=preset.adapter_type,
-            host=preset.adapter_host,
-            port=preset.adapter_port,
-            protocol_cmd=vehicle_prof.protocol_cmd,
-        )
-        caps = adapter.get_capabilities()
-        status_data = adapter.get_status()
-        return {
-            "adapter": status_data,
-            "capabilities": {
-                "adapter_type": caps.adapter_type,
-                "can_high_speed": caps.can_high_speed,
-                "can_medium_speed": caps.can_medium_speed,
-                "single_wire_can": caps.single_wire_can,
-                "multi_channel": caps.multi_channel_parallel,
-                "buffer_risk": caps.buffer_overflow_risk,
-                "max_sample_rate": caps.max_sample_rate_hz,
-            },
-            "vehicle_profile": {
-                "name": vehicle_prof.name,
-                "display": vehicle_prof.display_name,
-                "connector": vehicle_prof.connector_type,
-                "guidance": vehicle_prof.adapter_guidance,
-            },
-        }
+        adapter, connected, is_mock = await _get_active_adapter(preset, vehicle_prof)
+        try:
+            caps = adapter.get_capabilities()
+            status_data = adapter.get_status()
+            status_data["connected"] = connected
+            status_data["is_mock"] = is_mock
+            return {
+                "adapter": status_data,
+                "capabilities": {
+                    "adapter_type": caps.adapter_type,
+                    "can_high_speed": caps.can_high_speed,
+                    "can_medium_speed": caps.can_medium_speed,
+                    "single_wire_can": caps.single_wire_can,
+                    "multi_channel": caps.multi_channel_parallel,
+                    "buffer_risk": caps.buffer_overflow_risk,
+                    "max_sample_rate": caps.max_sample_rate_hz,
+                },
+                "vehicle_profile": {
+                    "name": vehicle_prof.name,
+                    "display": vehicle_prof.display_name,
+                    "connector": vehicle_prof.connector_type,
+                    "guidance": vehicle_prof.adapter_guidance,
+                },
+            }
+        finally:
+            if connected:
+                await adapter.disconnect()
 
     @app.get("/api/telemetry")
     async def get_telemetry(auth: str = Depends(verify_auth)):
         """Retrieve real-time PID telemetry and derived frequency."""
         preset = load_preset("default")
         vehicle_prof = get_vehicle_profile(preset.vehicle_domain)
-        adapter = get_adapter(
-            adapter_type=preset.adapter_type,
-            host=preset.adapter_host,
-            port=preset.adapter_port,
-            protocol_cmd=vehicle_prof.protocol_cmd,
-        )
-        connected = await adapter.connect()
+        adapter, connected, is_mock = await _get_active_adapter(preset, vehicle_prof)
         if not connected:
-            adapter = get_adapter("mock")
-            await adapter.connect()
+            return {
+                "connected": False,
+                "is_mock": False,
+                "vehicle_detected": False,
+                "telemetry": None,
+                "0C": None,
+                "0D": None,
+                "05": None,
+                "11": None,
+                "10": None,
+                "14": None,
+                "04": None,
+                "0F": None,
+                "06": None,
+                "07": None,
+                "vss_hz": 0.0,
+                "message": f"Adapter '{preset.adapter_type}' disconnected.",
+            }
 
         try:
             pids = ["0C", "0D", "05", "11", "10", "14", "04", "0F", "06", "07"]
-            telemetry: Dict[str, Any] = {}
+            telemetry: Dict[str, Any] = {
+                "connected": True,
+                "is_mock": is_mock,
+                "vehicle_detected": True,
+            }
             for pid in pids:
                 data_bytes = await adapter.query_pid("01", pid)
                 telemetry[pid] = decode_pid(pid, data_bytes) if data_bytes else 0.0
 
             speed = telemetry.get("0D", 0.0)
-            telemetry["vss_hz"] = calculate_vss_frequency(float(speed), vehicle_prof.vss_pulses_per_mile)
+            telemetry["vss_hz"] = calculate_vss_frequency(float(speed or 0.0), vehicle_prof.vss_pulses_per_mile)
             return telemetry
         finally:
             await adapter.disconnect()
@@ -215,15 +410,9 @@ def create_app(auth_token: Optional[str] = None) -> FastAPI:
             mfg_enum = Manufacturer.TOYOTA
 
         preset = load_preset("default")
-        adapter = get_adapter(
-            adapter_type=preset.adapter_type,
-            host=preset.adapter_host,
-            port=preset.adapter_port,
-        )
-        connected = await adapter.connect()
+        adapter, connected, is_mock = await _get_active_adapter(preset)
         if not connected:
-            adapter = get_adapter("mock")
-            await adapter.connect()
+            return {"manufacturer": mfg_enum.value, "parameters": [], "connected": False}
 
         try:
             params = get_manufacturer_parameters(mfg_enum)
@@ -239,7 +428,7 @@ def create_app(auth_token: Optional[str] = None) -> FastAPI:
                     "unit": p.unit,
                     "description": p.description,
                 })
-            return {"manufacturer": mfg_enum.value, "parameters": results}
+            return {"manufacturer": mfg_enum.value, "parameters": results, "connected": True, "is_mock": is_mock}
         finally:
             await adapter.disconnect()
 
@@ -251,19 +440,13 @@ def create_app(auth_token: Optional[str] = None) -> FastAPI:
     ):
         """Capture and return raw CAN frames."""
         preset = load_preset("default")
-        adapter = get_adapter(
-            adapter_type=preset.adapter_type,
-            host=preset.adapter_host,
-            port=preset.adapter_port,
-        )
-        connected = await adapter.connect()
+        adapter, connected, is_mock = await _get_active_adapter(preset)
         if not connected:
-            adapter = get_adapter("mock")
-            await adapter.connect()
+            return {"frames": [], "connected": False}
 
         try:
             frames = await adapter.capture_can_frames(count=count, filter_id=filter_id)
-            return {"frames": [f.to_dict() for f in frames]}
+            return {"frames": [f.to_dict() for f in frames], "connected": True, "is_mock": is_mock}
         finally:
             await adapter.disconnect()
 
@@ -277,15 +460,9 @@ def create_app(auth_token: Optional[str] = None) -> FastAPI:
     async def get_dtcs(mode: str = "03", auth: str = Depends(verify_auth)):
         """Retrieve diagnostic trouble codes and failure clusters."""
         preset = load_preset("default")
-        adapter = get_adapter(
-            adapter_type=preset.adapter_type,
-            host=preset.adapter_host,
-            port=preset.adapter_port,
-        )
-        connected = await adapter.connect()
+        adapter, connected, is_mock = await _get_active_adapter(preset)
         if not connected:
-            adapter = get_adapter("mock")
-            await adapter.connect()
+            return {"mode": mode, "count": 0, "dtcs": [], "clusters": {}, "connected": False}
 
         try:
             db = DtcDatabase()
@@ -307,6 +484,8 @@ def create_app(auth_token: Optional[str] = None) -> FastAPI:
                     for d in enriched
                 ],
                 "clusters": clusters,
+                "connected": True,
+                "is_mock": is_mock,
             }
         finally:
             await adapter.disconnect()
@@ -315,19 +494,13 @@ def create_app(auth_token: Optional[str] = None) -> FastAPI:
     async def clear_dtcs(auth: str = Depends(verify_auth)):
         """Clear DTCs and reset readiness monitors."""
         preset = load_preset("default")
-        adapter = get_adapter(
-            adapter_type=preset.adapter_type,
-            host=preset.adapter_host,
-            port=preset.adapter_port,
-        )
-        connected = await adapter.connect()
+        adapter, connected, is_mock = await _get_active_adapter(preset)
         if not connected:
-            adapter = get_adapter("mock")
-            await adapter.connect()
+            return {"status": "disconnected", "success": False}
 
         try:
             success = await adapter.clear_dtcs()
-            return {"status": "cleared" if success else "failed"}
+            return {"status": "cleared" if success else "failed", "success": success}
         finally:
             await adapter.disconnect()
 
@@ -400,31 +573,18 @@ def create_app(auth_token: Optional[str] = None) -> FastAPI:
         supported_pids: Set[str] = set()
         readiness_monitors: Dict[str, Any] = {}
         preset = load_preset("default")
-        try:
-            adapter = get_adapter(
-                adapter_type=preset.adapter_type,
-                host=preset.adapter_host,
-                port=preset.adapter_port,
-                device_name=getattr(preset, "socketcan_channel", "can0"),
-            )
-            if await adapter.connect():
+        adapter, connected, is_mock = await _get_active_adapter(preset)
+        if connected:
+            try:
                 supported_pids = await adapter.query_supported_pids()
                 pid01 = await adapter.query_pid("01", "01")
                 if pid01 and len(pid01) >= 4:
                     readiness_monitors = decode_im_readiness(pid01).get("monitors", {})
+            except Exception as exc:
+                logger.debug("Could not query adapter capabilities: %s", exc)
+            finally:
                 await adapter.disconnect()
-        except Exception as exc:
-            logger.debug("Could not query physical adapter capabilities: %s", exc)
 
-        # If no physical adapter, load mock vehicle profile for discovery
-        if not supported_pids:
-            mock_ad = MockDiagnosticAdapter()
-            await mock_ad.connect()
-            supported_pids = await mock_ad.query_supported_pids()
-            pid01 = await mock_ad.query_pid("01", "01")
-            if pid01:
-                readiness_monitors = decode_im_readiness(pid01).get("monitors", {})
-            await mock_ad.disconnect()
 
         results = []
         supported_count = 0
@@ -487,22 +647,17 @@ def create_app(auth_token: Optional[str] = None) -> FastAPI:
     async def get_supported_pids_endpoint(auth: str = Depends(verify_auth)):
         """Discover live vehicle-supported Mode 01 PIDs using 32-bit bitmasks."""
         preset = load_preset("default")
-        adapter = get_adapter(
-            adapter_type=preset.adapter_type,
-            host=preset.adapter_host,
-            port=preset.adapter_port,
-            device_name=getattr(preset, "socketcan_channel", "can0"),
-        )
-        connected = await adapter.connect()
+        adapter, connected, is_mock = await _get_active_adapter(preset)
         if not connected:
-            adapter = get_adapter("mock")
-            await adapter.connect()
+            return {"supported_pids": [], "count": 0, "connected": False}
 
         try:
             pids = await adapter.query_supported_pids()
             return {
                 "supported_pids": sorted(list(pids)),
                 "count": len(pids),
+                "connected": True,
+                "is_mock": is_mock,
             }
         finally:
             await adapter.disconnect()
@@ -511,22 +666,15 @@ def create_app(auth_token: Optional[str] = None) -> FastAPI:
     async def get_mode05_endpoint(tid: int = 1, auth: str = Depends(verify_auth)):
         """Retrieve Mode 05 Oxygen Sensor Monitoring test results for legacy diagnostics."""
         preset = load_preset("default")
-        adapter = get_adapter(
-            adapter_type=preset.adapter_type,
-            host=preset.adapter_host,
-            port=preset.adapter_port,
-            device_name=getattr(preset, "socketcan_channel", "can0"),
-        )
-        connected = await adapter.connect()
+        adapter, connected, is_mock = await _get_active_adapter(preset)
         if not connected:
-            adapter = get_adapter("mock")
-            await adapter.connect()
+            return {"error": "Disconnected", "connected": False}
 
         try:
             res = await adapter.query_mode05(tid=tid)
-            if not res:
+            if not res and is_mock:
                 res = decode_mode05_test(tid, [0x00, 0x5A])
-            return res
+            return res or {"error": "No data", "connected": True}
         finally:
             await adapter.disconnect()
 
@@ -559,22 +707,33 @@ def create_app(auth_token: Optional[str] = None) -> FastAPI:
     async def get_im_readiness(auth: str = Depends(verify_auth)):
         """Retrieve Mode 01 PID 01 Inspection/Maintenance (I/M) Readiness monitor flags."""
         preset = load_preset("default")
-        adapter = get_adapter(
-            adapter_type=preset.adapter_type,
-            host=preset.adapter_host,
-            port=preset.adapter_port,
-            device_name=getattr(preset, "socketcan_channel", "can0"),
-        )
-        connected = await adapter.connect()
+        adapter, connected, is_mock = await _get_active_adapter(preset)
         if not connected:
-            adapter = get_adapter("mock")
-            await adapter.connect()
+            return {
+                "overall_status": "DISCONNECTED",
+                "mil_on": False,
+                "dtc_count": 0,
+                "monitors": {},
+                "connected": False,
+            }
 
         try:
             raw_bytes = await adapter.query_pid("01", "01")
             if not raw_bytes or len(raw_bytes) < 4:
-                raw_bytes = [0x82, 0x07, 0x65, 0x01]
-            return decode_im_readiness(raw_bytes)
+                if is_mock:
+                    raw_bytes = [0x82, 0x07, 0x65, 0x01]
+                else:
+                    return {
+                        "overall_status": "NO_DATA",
+                        "mil_on": False,
+                        "dtc_count": 0,
+                        "monitors": {},
+                        "connected": True,
+                    }
+            result = decode_im_readiness(raw_bytes)
+            result["connected"] = True
+            result["is_mock"] = is_mock
+            return result
         finally:
             await adapter.disconnect()
 
@@ -582,22 +741,18 @@ def create_app(auth_token: Optional[str] = None) -> FastAPI:
     async def get_freeze_frame(auth: str = Depends(verify_auth)):
         """Retrieve Mode 02 Freeze Frame telemetry snapshot taken at time of fault."""
         preset = load_preset("default")
-        adapter = get_adapter(
-            adapter_type=preset.adapter_type,
-            host=preset.adapter_host,
-            port=preset.adapter_port,
-            device_name=getattr(preset, "socketcan_channel", "can0"),
-        )
-        connected = await adapter.connect()
+        adapter, connected, is_mock = await _get_active_adapter(preset)
         if not connected:
-            adapter = get_adapter("mock")
-            await adapter.connect()
+            return {"dtc": None, "frame_number": 0, "telemetry": {}, "connected": False}
 
         try:
             if hasattr(adapter, "query_freeze_frame"):
-                return await adapter.query_freeze_frame()
+                data = await adapter.query_freeze_frame()
+                data["connected"] = True
+                data["is_mock"] = is_mock
+                return data
             dtc_bytes = await adapter.query_pid("02", "02")
-            dtc = decode_dtc_bytes(dtc_bytes[0], dtc_bytes[1]) if dtc_bytes and len(dtc_bytes) >= 2 else "P0420"
+            dtc = decode_dtc_bytes(dtc_bytes[0], dtc_bytes[1]) if dtc_bytes and len(dtc_bytes) >= 2 else None
             rpm_bytes = await adapter.query_pid("02", "0C")
             speed_bytes = await adapter.query_pid("02", "0D")
             temp_bytes = await adapter.query_pid("02", "05")
@@ -611,6 +766,8 @@ def create_app(auth_token: Optional[str] = None) -> FastAPI:
                     "05": decode_pid("05", temp_bytes) if temp_bytes else 0.0,
                     "04": decode_pid("04", load_bytes) if load_bytes else 0.0,
                 },
+                "connected": True,
+                "is_mock": is_mock,
             }
         finally:
             await adapter.disconnect()
@@ -619,24 +776,19 @@ def create_app(auth_token: Optional[str] = None) -> FastAPI:
     async def get_mode06(auth: str = Depends(verify_auth)):
         """Retrieve Mode 06 On-Board Diagnostic Component Monitoring test results."""
         preset = load_preset("default")
-        adapter = get_adapter(
-            adapter_type=preset.adapter_type,
-            host=preset.adapter_host,
-            port=preset.adapter_port,
-            device_name=getattr(preset, "socketcan_channel", "can0"),
-        )
-        connected = await adapter.connect()
+        adapter, connected, is_mock = await _get_active_adapter(preset)
         if not connected:
-            adapter = get_adapter("mock")
-            await adapter.connect()
+            return {"tests": [], "count": 0, "connected": False}
 
         try:
             if hasattr(adapter, "query_mode06"):
                 results = await adapter.query_mode06()
-            else:
+            elif is_mock:
                 mock_ad = get_adapter("mock")
                 results = await mock_ad.query_mode06()
-            return {"tests": results, "count": len(results)}
+            else:
+                results = []
+            return {"tests": results, "count": len(results), "connected": True, "is_mock": is_mock}
         finally:
             await adapter.disconnect()
 
@@ -644,27 +796,38 @@ def create_app(auth_token: Optional[str] = None) -> FastAPI:
     async def get_vin_endpoint(auth: str = Depends(verify_auth)):
         """Retrieve Mode 09 vehicle identification, calibration ID, and CVN."""
         preset = load_preset("default")
-        adapter = get_adapter(
-            adapter_type=preset.adapter_type,
-            host=preset.adapter_host,
-            port=preset.adapter_port,
-            device_name=getattr(preset, "socketcan_channel", "can0"),
-        )
-        connected = await adapter.connect()
+        adapter, connected, is_mock = await _get_active_adapter(preset)
         if not connected:
-            adapter = get_adapter("mock")
-            await adapter.connect()
+            return {
+                "vin": "",
+                "calibration_id": "",
+                "cvn": "",
+                "year": None,
+                "make": None,
+                "model": None,
+                "country": None,
+                "display": "Vehicle: Not Detected",
+                "connected": False,
+            }
 
         try:
-            if hasattr(adapter, "query_vin"):
-                return await adapter.query_vin()
+            data = await adapter.query_vin() if hasattr(adapter, "query_vin") else {"vin": "", "calibration_id": "", "cvn": ""}
+            decoded = decode_vin(data.get("vin", ""))
             return {
-                "vin": "1HGCR2F83HA123456",
-                "calibration_id": "37805-5A2-A050",
-                "cvn": "E8B2C41D",
+                "vin": data.get("vin", ""),
+                "calibration_id": data.get("calibration_id", ""),
+                "cvn": data.get("cvn", ""),
+                "year": decoded.get("year"),
+                "make": decoded.get("make"),
+                "model": decoded.get("model"),
+                "country": decoded.get("country"),
+                "display": decoded.get("display") if decoded.get("valid") else "Vehicle: Unknown",
+                "connected": True,
+                "is_mock": is_mock,
             }
         finally:
             await adapter.disconnect()
+
 
     @app.get("/api/decode-dtc")
     async def get_decoded_dtc(code: str = Query("P0420"), auth: str = Depends(verify_auth)):

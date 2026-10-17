@@ -3,13 +3,26 @@
 
 """Integration tests for new server endpoints (interfaces, diagnostic modes, and OEM DTCs)."""
 
+from pathlib import Path
+
+import pytest
 from fastapi.testclient import TestClient
 
+from app.config import ToolPreset, save_preset
 from app.server import create_app
 
 AUTH_TOKEN = "test-token-expansion-secret-999"  # noqa: S105 - Test fixture token for isolated server endpoint tests
 app = create_app(auth_token=AUTH_TOKEN)
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def configure_mock_preset(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Ensure test suite runs against isolated mock adapter preset."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    preset = ToolPreset(name="default", adapter_type="mock")
+    save_preset(preset)
+
 
 
 def test_api_interfaces_endpoint():
